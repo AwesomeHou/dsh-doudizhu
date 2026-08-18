@@ -4,11 +4,12 @@
 
 一个运行在 **DeepSeek Harness Web GUI**（`http://127.0.0.1:3080`）里的斗地主插件。
 
-- **第一阶段（当前规划）**：3 人标准斗地主 · **玩家 vs 玩家（PVP）**，Cloudflare 云端负责匹配与实时对局同步。
-- **第二阶段**：引入 **DSH Agent** —— 用自己的 DSH 或别人的 DSH 当牌友/对手（人机混桌、全 AI 观战对局）。
+- **M1（当前）**：3 人标准斗地主本地闭环 · **玩家 vs 机器人 ×2**，使用本地规则引擎与 localStorage 模拟 Token/资料。
+- **M2（后续）**：3 人真人 **PVP**，由 Cloudflare 负责匹配、实时同步与服务端经济记账。
+- **M3（后续）**：引入 **DSH Agent** —— 用自己的 DSH 或别人的 DSH 当牌友/对手（人机混桌、全 AI 观战对局）。
 
-> ⚠️ **状态：M1 本地最小闭环开发中。**
-> 当前已包含 React/TypeScript 插件入口、浅色大厅/牌桌 UI、本地 Token/签到、规则引擎与单机机器人对局；Cloudflare PVP 后端仍按路线图进入 M2。
+> **状态：M1 本地最小闭环已具备，M2 云端 PVP 尚未接入。**
+> 当前已包含 React/TypeScript 插件入口、浅色大厅/牌桌 UI、本地 Token/签到、默认头像选择、昵称编辑、规则引擎与单机机器人对局。
 
 ## 快速导航
 
@@ -27,9 +28,9 @@
 ```
 dsh-doudizhu/
 ├── docs/            # 需求、策划、架构、路线图、埋点
-├── src/             # DSH 插件源码（client / engine / server 三部分，规划中）
+├── src/             # DSH 插件入口与 React 客户端 UI
 ├── worker/          # Cloudflare 后端（Workers + Durable Objects + D1，规划中）
-├── shared/          # 客户端与服务端共享的类型/常量（规划中）
+├── shared/          # 客户端与服务端共享的规则引擎、配置与协议
 ├── assets/          # 美术资源（扑克牌、头像、UI、音效）
 ├── scratch/         # 草稿文件夹（已 gitignore，不入库）
 ├── package.json     # DSH 插件清单（安装入口）
@@ -45,7 +46,11 @@ dsh-doudizhu/
 
 ## 本地环境
 
-- Node.js ≥ 20，pnpm。
+- Node.js ≥ 20，npm。
+- 安装依赖：`npm install`
+- 类型检查：`npm run typecheck`
+- 单元测试：`npm test`
+- 构建插件：`npm run build`
 - 插件安装（进入开发期后）：`dsh plugin --profile web add AwesomeHou/dsh-doudizhu`
 - 后端本地调试：`cd worker && wrangler dev`（需 Cloudflare 账号与 wrangler 配置）。
 

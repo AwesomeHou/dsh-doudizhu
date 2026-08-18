@@ -68,4 +68,5 @@ assets/
 
 ## 当前接入
 - 牌面仍使用 Unicode + CSS 卡片，默认头像直接使用 `deepseek-blue.svg` / `deepseek-black.svg`，未揭示底牌使用黑色品牌图牌背。
+- 为避免 DSH 插件运行时无法解析仓库内静态路径，客户端通过 `src/client/brandAssets.ts` 将上述两份 SVG 内嵌为 Data URI；`assets/` 中的 SVG 仍是唯一源素材。
 - 发牌、底牌揭示和出牌使用 CSS 动画，音效仍以 Web Audio 合成为主。

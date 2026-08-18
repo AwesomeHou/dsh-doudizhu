@@ -1,6 +1,6 @@
 # shared/ — 客户端与服务端共享代码
 
-> **更新**：规则引擎已从 `src/engine` 落实到这里（`shared/engine/`），客户端插件与 Cloudflare Worker 引用同一份实现。M1 起生效。
+> **更新**：规则引擎已从原规划的 `src/engine` 迁移到 `shared/engine/`，客户端插件与 Cloudflare Worker 复用同一份实现。M1 起生效。
 
 - `engine/` — 斗地主规则引擎（纯 TS、无 I/O、可单测）：
   - `types.ts` 牌/牌型/状态类型

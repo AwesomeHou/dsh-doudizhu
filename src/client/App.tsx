@@ -31,8 +31,17 @@ const STYLE = `
 .ddz-float{position:fixed;right:18px;bottom:18px;z-index:2147483000;display:flex;align-items:center;gap:8px;background:var(--dz-blue);color:#fff;border:0;border-radius:999px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 7px 14px rgba(54,75,180,.25);transition:background-color .18s ease,transform .18s ease}
 .ddz-float:hover{background:var(--dz-blue-hover);transform:translateY(-1px)}
 .ddz-overlay{position:fixed;inset:0;z-index:2147482999;background:rgba(28,32,42,.26);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
-.ddz-modal{background:var(--dz-panel);border-radius:16px;width:min(1040px,94vw);height:min(700px,92vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 42px rgba(26,32,47,.18)}
+.ddz-modal{background:var(--dz-panel);border-radius:18px;width:min(1180px,94vw);height:min(760px,92vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 42px rgba(26,32,47,.18)}
 .ddz-head{display:flex;align-items:center;gap:10px;min-height:64px;padding:14px 24px;border-bottom:1px solid var(--dz-line);font-weight:700;background:var(--dz-panel)}
+.ddz-modal-head{justify-content:flex-start}
+.ddz-product-title{font-size:16px;letter-spacing:-.01em}
+.ddz-head-meta{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px}
+.ddz-table-head{margin:-24px -24px 16px;min-height:68px}
+.ddz-table-title{display:flex;align-items:center;gap:12px}
+.ddz-table-title-copy{display:flex;flex-direction:column;gap:2px}
+.ddz-table-head>span:first-of-type{font-size:15px;letter-spacing:-.01em}
+.ddz-table-head>span:last-of-type{font-size:12px;font-variant-numeric:tabular-nums}
+.ddz-table-head>.ddz-btn{flex:none}
 .ddz-body{flex:1;overflow:auto;padding:24px;background:var(--dz-surface)}
 .ddz-row{display:flex;gap:10px;align-items:center}
 .ddz-dim{color:var(--dz-dim)}
@@ -41,9 +50,6 @@ const STYLE = `
 .ddz-card:hover{transform:translateY(-2px);box-shadow:0 4px 9px rgba(26,32,47,.14)}
 .ddz-card.red{color:var(--dz-red)}
 .ddz-card.sel{transform:translateY(-14px);box-shadow:0 0 0 2px var(--dz-blue),0 5px 10px rgba(77,107,254,.18)}
-.ddz-card-back{width:36px;height:54px;border-radius:6px;border:1px solid #c7d0ff;box-shadow:0 1px 2px rgba(26,32,47,.1)}
-.ddz-card-back.blue{background:#4d6bfe}
-.ddz-card-back.black{background:#454b58;border-color:#353b47}
 .ddz-seat{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:144px}
 .ddz-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:18px}
 .ddz-avatar.blue{background:#4d6bfe}
@@ -60,7 +66,48 @@ const STYLE = `
 .ddz-tab:hover{background:#fafbff;border-color:#cbd3ea}
 .ddz-tab.on{border-color:var(--dz-blue);box-shadow:0 0 0 1px var(--dz-blue);background:#fbfcff}
 .ddz-toast{position:fixed;left:50%;top:20px;transform:translateX(-50%);background:#fff;color:var(--dz-text);border:1px solid var(--dz-blue);border-radius:10px;padding:10px 18px;font-size:14px;z-index:2147483001;box-shadow:0 8px 12px rgba(26,32,47,.14)}
-@media (max-width:720px){.ddz-modal{width:100vw;height:100vh;border-radius:0}.ddz-head{padding:12px 16px}.ddz-body{padding:16px}.ddz-row{gap:8px}.ddz-tab{flex-basis:100%}.ddz-seat{min-width:96px}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-back{width:28px;height:42px}.ddz-table{padding:12px}.ddz-float{right:12px;bottom:12px}}
+.ddz-lobby{padding:30px 36px 36px}
+.ddz-lobby-top{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:46px}
+.ddz-profile{gap:12px}
+.ddz-profile-copy{display:flex;flex-direction:column;gap:2px}
+.ddz-profile-name{font-size:15px;font-weight:700}
+.ddz-profile-uid{font-size:12px}
+.ddz-balance{gap:14px}
+.ddz-balance-copy{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.ddz-balance-label{font-size:12px;color:var(--dz-dim)}
+.ddz-balance-value{font-size:20px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.ddz-lobby-intro{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.ddz-section-title{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.ddz-lobby-subtitle{font-size:13px}
+.ddz-table-grid{display:flex;gap:12px;align-items:stretch}
+.ddz-table-grid .ddz-tab{min-height:92px}
+.ddz-table-grid .ddz-tab>div:first-child{font-size:15px;margin-bottom:6px}
+.ddz-lobby-actions{display:flex;align-items:center;gap:10px;margin-top:22px}
+.ddz-helper{font-size:12px;margin-top:10px}
+.ddz-game-table{min-height:0;gap:14px;padding:24px;background:#fbfcfd;border-color:#edf0f4;border-radius:18px}
+.ddz-table-top{display:flex;justify-content:center;min-height:64px}
+.ddz-table-middle{display:grid;grid-template-columns:minmax(144px,1fr) minmax(320px,1.6fr) minmax(144px,1fr);align-items:center;gap:18px;flex:1}
+.ddz-table-center{min-height:188px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.ddz-table-center .ddz-played{min-height:82px}
+.ddz-table-center .ddz-played .ddz-card{width:48px;height:68px}
+.ddz-table-spacer{min-width:144px}
+.ddz-pot-label{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid var(--dz-line);font-size:12px;color:var(--dz-dim)}
+.ddz-pot-label strong{color:var(--dz-text);font-weight:700}
+.ddz-table-bottom{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:6px}
+.ddz-human-area{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.ddz-hand{display:flex;justify-content:center;flex-wrap:wrap;gap:4px;padding:2px 0}
+.ddz-action-dock{display:flex;justify-content:center;gap:10px;min-height:40px}
+.ddz-action-status{font-size:13px;padding:10px 14px;border-radius:999px;background:#fff;border:1px solid var(--dz-line)}
+.ddz-settle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:100%}
+.ddz-result-amount{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em;margin:8px 0}
+.ddz-seat{gap:8px}
+.ddz-seat-chip{display:flex;align-items:center;gap:9px;padding:6px 12px 6px 6px;border:1px solid var(--dz-line);border-radius:999px;background:rgba(255,255,255,.86);box-shadow:0 2px 6px rgba(26,32,47,.08)}
+.ddz-seat-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ddz-seat-name{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;white-space:nowrap}
+.ddz-seat-meta{font-size:11px;color:var(--dz-dim);white-space:nowrap}
+.ddz-seat-cards{font-size:11px;color:var(--dz-dim)}
+.ddz-card-count{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef1f6}
+@media (max-width:720px){.ddz-modal{width:100vw;height:100vh;border-radius:0}.ddz-head{padding:12px 16px}.ddz-body{padding:16px}.ddz-table-head{margin:-16px -16px 12px}.ddz-head-meta{gap:6px}.ddz-head-meta .ddz-dim{display:none}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:100%;justify-content:space-between}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-table-middle{grid-template-columns:1fr;gap:12px}.ddz-table-spacer{display:none}.ddz-table-center{min-height:150px;order:-1}.ddz-table-top{min-height:52px}.ddz-seat{min-width:96px}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-table{padding:12px}.ddz-float{right:12px;bottom:12px}}
 @media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-float,.ddz-card{transition:none}.ddz-card:hover,.ddz-float:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}}
 `
 
@@ -80,10 +127,6 @@ function CardView({ card, selected, onClick }: { card: Card; selected?: boolean;
       if (event.key === 'Enter' || event.key === ' ') onClick()
     } : undefined,
   }, label)
-}
-
-function Back({ color }: { color: 'blue' | 'black' }) {
-  return createElement('div', { className: `ddz-card-back ${color}` })
 }
 
 function Avatar({ avatarId, size = 40 }: { avatarId: string; size?: number }) {
@@ -144,30 +187,33 @@ function Lobby(props: {
   const rank = rankForBalance(balance)
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
 
-  return createElement('div', { className: 'ddz-body' },
-    createElement('div', { className: 'ddz-row', style: { justifyContent: 'space-between', marginBottom: 16 } },
-      createElement('div', { className: 'ddz-row' },
+  return createElement('div', { className: 'ddz-body ddz-lobby' },
+    createElement('div', { className: 'ddz-lobby-top' },
+      createElement('div', { className: 'ddz-profile ddz-row' },
         createElement(Avatar, { avatarId: profile.avatarId }),
-        createElement('div', null,
-          createElement('div', { style: { fontWeight: 700 } }, profile.nickname),
-          createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } }, 'UID ' + profile.uid.slice(0, 8)),
+        createElement('div', { className: 'ddz-profile-copy' },
+          createElement('div', { className: 'ddz-profile-name' }, profile.nickname),
+          createElement('div', { className: 'ddz-dim ddz-profile-uid' }, 'UID ' + profile.uid.slice(0, 8)),
         ),
         createElement('span', { className: 'ddz-rank' }, rank.name),
       ),
-      createElement('div', { className: 'ddz-row' },
-        createElement('div', null,
-          createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } }, 'Token 余额'),
-          createElement('div', { style: { fontSize: 18, fontWeight: 800, fontVariantNumeric: 'tabular-nums' } }, balance.toLocaleString()),
+      createElement('div', { className: 'ddz-balance ddz-row' },
+        createElement('div', { className: 'ddz-balance-copy' },
+          createElement('div', { className: 'ddz-balance-label' }, 'Token 余额'),
+          createElement('div', { className: 'ddz-balance-value' }, balance.toLocaleString()),
         ),
         createElement('button', {
-          className: 'ddz-btn',
+          className: 'ddz-btn ddz-balance-btn',
           disabled: claimed,
           onClick: onClaim,
         }, claimed ? '今日已领' : `签到 +${CONFIG.dailyTokens.toLocaleString()}`),
       ),
     ),
-    createElement('div', { className: 'ddz-dim', style: { marginBottom: 10 } }, '选择桌别，开局自动匹配 2 个本地机器人（M1 本地演示）'),
-    createElement('div', { className: 'ddz-row', style: { flexWrap: 'wrap' } },
+    createElement('div', { className: 'ddz-lobby-intro' },
+      createElement('div', { className: 'ddz-section-title' }, '选择桌别'),
+      createElement('div', { className: 'ddz-dim ddz-lobby-subtitle' }, '开局自动匹配 2 个本地机器人（M1 本地演示）'),
+    ),
+    createElement('div', { className: 'ddz-table-grid' },
       ...CONFIG.tables.map((t) =>
         createElement('button', {
           key: t.id,
@@ -182,13 +228,13 @@ function Lobby(props: {
         ),
       ),
     ),
-    createElement('div', { className: 'ddz-row', style: { marginTop: 18 } },
+    createElement('div', { className: 'ddz-lobby-actions' },
       createElement('button', { className: 'ddz-btn', disabled: balance < (tableById(tableId)?.base ?? 0), onClick: () => onStart(tableId) },
         '开始本地对局'),
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onClose }, '最小化'),
     ),
     balance < (tableById(tableId)?.base ?? 0) &&
-      createElement('div', { className: 'ddz-dim', style: { marginTop: 8, fontSize: 12 } },
+      createElement('div', { className: 'ddz-dim ddz-helper' },
         '余额不足该桌底注，先签到或换低倍桌'),
   )
 }
@@ -328,8 +374,8 @@ function Table(props: {
   const [botA, botB] = otherSeats
   const currentSeat = state.current
 
-  return createElement('div', { className: 'ddz-body' },
-    createElement('div', { className: 'ddz-head', style: { margin: '-24px -24px 12px' } },
+  return createElement('div', { className: 'ddz-body ddz-table-screen' },
+    createElement('div', { className: 'ddz-head ddz-table-head' },
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onExit }, '← 退出'),
       createElement('span', null, tableById(tableId)?.label ?? tableId),
       createElement('span', { className: 'ddz-dim' }, `底注 ${base.toLocaleString()} · 倍数 ×${state.multiplier} · 炸弹 ${state.bombCount}`),
@@ -337,14 +383,16 @@ function Table(props: {
     ),
     notice && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
 
-    createElement('div', { className: 'ddz-table' },
+    createElement('div', { className: 'ddz-table ddz-game-table' },
       // 上家（botB）
-      createElement(SeatPanel, { view: botB!, state, isTurn: currentSeat === botB!.seat }),
-      createElement('div', { className: 'ddz-row', style: { justifyContent: 'space-between' } },
+      createElement('div', { className: 'ddz-table-top' },
+        createElement(SeatPanel, { view: botB!, state, isTurn: currentSeat === botB!.seat }),
+      ),
+      createElement('div', { className: 'ddz-table-middle', style: { justifyContent: 'space-between' } },
         createElement(SeatPanel, { view: botA!, state, isTurn: currentSeat === botA!.seat }),
-        createElement('div', { style: { textAlign: 'center' } },
+        createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
           state.landlord !== null
-            ? createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', gap: 8, marginBottom: 4 } },
+            ? createElement('div', { className: 'ddz-pot-label', style: { justifyContent: 'center', gap: 8, marginBottom: 4 } },
                 createElement('span', { className: 'ddz-landlord-badge' }, '地主'),
                 createElement('span', { className: 'ddz-dim', style: { fontSize: 12 } }, SEATS[state.landlord]!.nickname),
               )
@@ -360,17 +408,17 @@ function Table(props: {
             createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } },
               `${SEATS[state.lastActor]!.nickname} 出了 ${state.lastPlay?.kind ?? ''}`),
         ),
-        createElement('div', { style: { width: 120 } }),
+        createElement('div', { className: 'ddz-table-spacer' }),
       ),
       // 底牌
       state.landlord !== null &&
-        createElement('div', { className: 'ddz-bottom', style: { justifyContent: 'center' } },
+        createElement('div', { className: 'ddz-bottom ddz-table-bottom', style: { justifyContent: 'center' } },
           createElement('div', { className: 'ddz-dim', style: { fontSize: 12, marginRight: 6 } }, '底牌'),
           ...state.bottom.map((c, i) => createElement(CardView, { key: i, card: c })),
         ),
       // 我的手牌与操作
-      createElement('div', { style: { textAlign: 'center' } },
-        createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', flexWrap: 'wrap', gap: 4, paddingBottom: 4 } },
+      createElement('div', { className: 'ddz-human-area', style: { textAlign: 'center' } },
+        createElement('div', { className: 'ddz-row ddz-hand', style: { justifyContent: 'center', flexWrap: 'wrap', gap: 4, paddingBottom: 4 } },
           ...sortedHand.map((c, i) =>
             createElement(CardView, {
               key: `${c.r}-${c.s}-${i}`,
@@ -380,14 +428,14 @@ function Table(props: {
             }),
           ),
         ),
-        createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', gap: 10, marginTop: 10 } },
+        createElement('div', { className: 'ddz-action-dock ddz-row', style: { justifyContent: 'center', gap: 10, marginTop: 10 } },
           state.phase === 'calling'
             ? (isMyTurn
                 ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
                     createElement('button', { className: 'ddz-btn', onClick: () => humanAct({ type: 'call', call: true }) }, '叫地主'),
                     createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => humanAct({ type: 'call', call: false }) }, '不叫'),
                   )
-                : createElement('span', { className: 'ddz-dim' }, '等待叫地主…'))
+                : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
             : (state.phase === 'playing'
                 ? (isMyTurn
                     ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
@@ -395,7 +443,7 @@ function Table(props: {
                         createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: doHint }, '提示'),
                         createElement('button', { className: 'ddz-btn ddz-btn-ghost', disabled: state.lastPlay === null, onClick: () => humanAct({ type: 'pass' }) }, '过'),
                       )
-                    : createElement('span', { className: 'ddz-turn' }, '对手思考中…'))
+                    : createElement('span', { className: 'ddz-action-status ddz-turn' }, '对手思考中…'))
                 : null),
         ),
       ),
@@ -408,20 +456,19 @@ function SeatPanel(props: { view: SeatView; state: GameState; isTurn: boolean })
   const handCount = state.hands[view.seat]!.length
   const role = state.landlord !== null ? roleOf(state, view.seat) : null
   return createElement('div', { className: 'ddz-seat' },
-    createElement('div', { className: 'ddz-row' },
+    createElement('div', { className: 'ddz-seat-chip' },
       createElement(Avatar, { avatarId: view.avatarId, size: 32 }),
-      createElement('div', null,
-        createElement('div', { className: 'ddz-row', style: { gap: 6 } },
+      createElement('div', { className: 'ddz-seat-copy' },
+        createElement('div', { className: 'ddz-seat-name', style: { gap: 6 } },
           createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, view.nickname),
           role === 'landlord' && createElement('span', { className: 'ddz-landlord-badge' }, '地主'),
           isTurn && createElement('span', { className: 'ddz-turn', style: { fontSize: 11 } }, '行动中'),
         ),
-        createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } }, `剩 ${handCount} 张`),
+        createElement('div', { className: 'ddz-seat-meta' }, `剩 ${handCount} 张`),
       ),
     ),
-    createElement('div', { className: 'ddz-row', style: { gap: 2, flexWrap: 'wrap', justifyContent: 'center' } },
-      ...Array.from({ length: Math.min(handCount, 12) }, (_, i) => createElement(Back, { key: i, color: view.avatarId === 'default-02' ? 'black' : 'blue' })),
-      handCount > 12 && createElement('span', { className: 'ddz-dim', style: { fontSize: 11 } }, `+${handCount - 12}`),
+    createElement('div', { className: 'ddz-seat-cards' },
+      createElement('span', { className: 'ddz-card-count' }, handCount + ' 张手牌'),
     ),
   )
 }
@@ -448,7 +495,7 @@ function Settle(props: {
       win ? '🎉 你赢了' : myDelta === 0 ? '平局' : '这局输了'),
     createElement('div', { className: 'ddz-dim', style: { margin: '10px 0' } },
       `${result.winner} · ${result.spring === 'none' ? '无春天' : result.spring} · 总倍数 ×${result.multiplier} · 抽水 ${result.rake.toLocaleString()}`),
-    createElement('div', { style: { fontSize: 24, fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '12px 0' } },
+    createElement('div', { className: 'ddz-result-amount' },
       `${myDelta > 0 ? '+' : ''}${myDelta.toLocaleString()}`),
     createElement('div', { className: 'ddz-dim' }, `当前余额 ${balance.toLocaleString()}`),
     createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', gap: 10, marginTop: 18 } },
@@ -504,8 +551,8 @@ export function DoudizhuApp() {
       '🃏 斗地主', createElement('span', { style: { fontSize: 11, opacity: .8 } }, '等待中，来一把')),
     open && createElement('div', { className: 'ddz-overlay', onClick: (e: { target: unknown; currentTarget: unknown }) => { if (e.target === e.currentTarget) setOpen(false) } },
       createElement('div', { className: 'ddz-modal' },
-        createElement('div', { className: 'ddz-head' },
-          createElement('span', { style: { fontSize: 16 } }, '🃏 斗地主'),
+        createElement('div', { className: 'ddz-head ddz-modal-head' },
+          createElement('span', { className: 'ddz-product-title', style: { fontSize: 16 } }, '🃏 斗地主'),
           createElement('span', { className: 'ddz-rank' }, rankForBalance(balance).name),
           createElement('span', { className: 'ddz-dim', style: { fontSize: 12, marginLeft: 'auto' } }, 'M1 本地演示 · 云端对局即将到来'),
           createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => setOpen(false) }, '关闭'),

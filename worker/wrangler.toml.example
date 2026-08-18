@@ -1,0 +1,58 @@
+# =============================================================
+# dsh-doudizhu Worker 配置模板
+# 复制为 wrangler.toml 并填入真实值；真实文件不入库（.gitignore）
+# 参考：https://developers.cloudflare.com/workers/wrangler/configuration/
+# =============================================================
+
+name = "dsh-doudizhu"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 从 `wrangler whoami` 获取
+account_id = "REPLACE_ME"
+
+# 部署用域名/路由（可选；本地 dev 不需要）
+# routes = [
+#   { pattern = "api.doudizhu.example.com", zone_id = "REPLACE_ME" }
+# ]
+
+# ---- Durable Objects ----
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "PLAYER"
+class_name = "Player"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room", "Player"]
+
+# ---- D1 数据库 ----
+[[d1_databases]]
+binding = "DB"
+database_name = "dsh-doudizhu"
+database_id = "REPLACE_ME"
+
+# ---- KV ----
+[[kv_namespaces]]
+binding = "KVPUBLIC"
+id = "REPLACE_ME"
+
+# ---- R2（Phase 2 自定义头像）----
+# [[r2_buckets]]
+# binding = "AVATARS"
+# bucket_name = "dsh-doudizhu-avatars"
+
+# ---- 定时任务（埋点聚合，每小时）----
+# [triggers]
+# crons = ["0 * * * *"]
+
+# ---- 环境变量（推荐用 wrangler secret 注入，勿写死）----
+# [vars]
+# PUBLIC_DOMAIN = "api.doudizhu.example.com"
+# ANALYTICS_INGEST_KEY = "set-via-secret"
+# AUTH_SECRET = "set-via-secret"
+# ADMIN_KEY = "set-via-secret"

@@ -1,0 +1,13 @@
+# dsh-doudizhu bundle patch
+#
+# 安装入口（进入开发期后，从 DSH 安装本插件时生效）：
+#   dsh plugin --profile web add <本地路径 | AwesomeHou/dsh-doudizhu>
+#
+# 本文件是 `dsh.bundle.patch` 层：profile 启动时会把本插件插入 bundle 栈。
+#
+# ⚠️ 当前为骨架占位，插件代码尚未实现（见 docs/路线图.md M1）。
+# 现在插入会加载一个空的 index，等 M1 有最小实现后再启用即可。
+#
+# - insert:
+#     - id: doudizhu
+#       name: 'dsh-doudizhu'

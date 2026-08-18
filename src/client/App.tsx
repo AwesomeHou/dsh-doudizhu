@@ -1,21 +1,23 @@
 /**
- * dsh-doudizhu 客户端主界面（M1 本地模式）
+ * dsh-doudizhu 客户端主界面（M1 本地 + M2 在线）
  * - 浮动入口按钮 + 全屏对局面板（body portal）
- * - 大厅：昵称/头像/段位/余额、每日签到、桌别选择
- * - 牌桌：叫地主/抢地主 → 出牌/过/提示 → 结算
- * - 经济：localStorage 模拟余额/签到（M2 起由云端接管）
+ * - 大厅：昵称/头像/段位/余额、每日签到、桌别选择、本地/在线模式切换
+ * - 牌桌（本地机器人 or 线上真人 PVP）：叫地主/抢地主 → 出牌/过/提示 → 结算
+ * - 经济：本地 localStorage 模拟；在线走 Cloudflare Worker（服务端权威记账）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createElement } from 'react'
 import { CONFIG, rankForBalance, tableById } from '../../shared/config.ts'
 import { cardName, sortHand } from '../../shared/engine/deck.ts'
-import { applyAction, createGame, roleOf, type GameState } from '../../shared/engine/game.ts'
+import { applyAction, createGame, type GameState } from '../../shared/engine/game.ts'
 import { settle } from '../../shared/engine/scoring.ts'
 import { classify, hintPlay } from '../../shared/engine/valid.ts'
 import { canBeat } from '../../shared/engine/compare.ts'
-import { botMove } from '../../shared/engine/bot.ts'
+import { botCall, botMove } from '../../shared/engine/bot.ts'
 import { KIND_NAMES, RANK_NAMES, SUIT_SYMBOLS, type Card, type Role, type Seat } from '../../shared/engine/types.ts'
 import { deepseekBlueUrl, deepseekBlackUrl } from './brandAssets.ts'
+import * as api from './api.ts'
+import { tableViewFromEngine, tableViewFromProtocol, type TableView, type SeatView } from './table-view.ts'
 
 /* ============================== 样式 ============================== */
 
@@ -110,6 +112,9 @@ const STYLE = `
 .ddz-table-grid .ddz-tab>div:first-child{font-size:15px;margin-bottom:6px}
 .ddz-lobby-actions{display:flex;align-items:center;gap:10px;margin-top:22px}
 .ddz-helper{font-size:12px;margin-top:10px}
+.ddz-mode-switch{display:inline-flex;border:1px solid var(--dz-line);border-radius:999px;padding:3px;gap:2px;background:#f7f8fb}
+.ddz-mode-btn{appearance:none;border:0;background:transparent;border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--dz-dim);cursor:pointer}
+.ddz-mode-btn.on{background:#fff;color:#304bc5;box-shadow:0 1px 4px rgba(26,32,47,.12)}
 .ddz-table-screen{display:flex;flex-direction:column}
 .ddz-table-reserved-bar{height:44px;flex:0 0 44px;visibility:hidden}
 .ddz-game-table{min-height:0;gap:14px;padding:24px;background:#fbfcfd;border-color:#edf0f4;border-radius:18px}
@@ -287,7 +292,7 @@ function PlayedArea({ seat, cards, countdownSeconds = null }: { seat: Seat; card
   const specialClass = isSpecialPlay && play ? ` ddz-special-play ddz-special-${play.kind}` : ''
   return createElement('div', {
     className: 'ddz-play-area',
-    'aria-label': `${SEATS[seat]!.nickname}出牌区${play ? `，${KIND_NAMES[play.kind]}` : ''}`,
+    'aria-label': `${seatLabel(seat, 0)}出牌区${play ? `，${KIND_NAMES[play.kind]}` : ''}`,
   },
   countdownSeconds !== null && createElement('span', {
     className: 'ddz-countdown ddz-play-area-countdown' + (countdownSeconds <= 3 ? ' urgent' : ''),
@@ -312,6 +317,182 @@ function PlayedArea({ seat, cards, countdownSeconds = null }: { seat: Seat; card
 function seatLabel(seat: Seat, humanSeat: Seat): string {
   if (seat === humanSeat) return '你'
   return ['下家', '上家'][seat < humanSeat ? 0 : 1] ?? '对手'
+}
+
+/* ============================== 牌桌外壳（本地/线上共用） ============================== */
+
+type PlayedBySeat = [Card[] | null, Card[] | null, Card[] | null]
+
+function GameTableShell(props: {
+  view: TableView
+  selected: Card[]
+  notice: string | null
+  remainingSeconds: number | null
+  onToggleCard: (c: Card) => void
+  onPlay: () => void
+  onPass: () => void
+  onHint: () => void
+  onCall: (call: boolean) => void
+  onExit: () => void
+  onDismissNotice: () => void
+}) {
+  const { view, selected, notice, remainingSeconds, onToggleCard, onPlay, onPass, onHint, onCall, onExit, onDismissNotice } = props
+  const [playedBySeat, setPlayedBySeat] = useState<PlayedBySeat>(() => [null, null, null])
+
+  // 每位玩家保留本轮最近一次出的牌
+  useEffect(() => {
+    if (view.lastPlayCards === null || view.lastPlayCards.length === 0) {
+      if (view.lastActor !== null && view.phase === 'playing') setPlayedBySeat([null, null, null])
+      return
+    }
+    if (view.lastActor === null) return
+    const actor = view.lastActor
+    const cards = view.lastPlayCards
+    setPlayedBySeat((prev) => {
+      if (prev[actor] === cards) return prev
+      const next = [...prev] as PlayedBySeat
+      next[actor] = cards
+      return next
+    })
+  }, [view.phase, view.lastActor, view.lastPlayCards])
+
+  const sortedHand = useMemo(() => sortHand(view.myHand), [view.myHand])
+  const humanView = view.seats.find((s) => s.isHuman) ?? view.seats[view.mySeat]
+  const otherSeats = view.seats.filter((s) => !s.isHuman)
+  const botA = otherSeats[0]
+  const botB = otherSeats[1]
+  const isMyTurn = view.phase !== 'settled' && !view.finished && view.current === view.mySeat
+  const lastPlay = view.lastPlayCards && view.lastPlayCards.length > 0 ? classify(view.lastPlayCards) : null
+  const canPass = view.phase === 'playing' && lastPlay !== null
+  const canPlaySelected = (): boolean => {
+    if (view.phase !== 'playing' || !isMyTurn || selected.length === 0) return false
+    const play = classify(selected)
+    if (!play) return false
+    if (!canBeat(play, lastPlay)) return false
+    return selected.every((c) => view.myHand.some((x) => x.r === c.r && x.s === c.s))
+  }
+  const showCountdown = remainingSeconds !== null && remainingSeconds > 0
+
+  return createElement('div', { className: 'ddz-body ddz-table-screen' },
+    createElement('button', { className: 'ddz-table-exit', onClick: onExit }, '← 退出牌桌'),
+    createElement('div', { className: 'ddz-table-reserved-bar', 'aria-hidden': true }),
+    notice && view.phase !== 'playing' && createElement('div', { className: 'ddz-toast', onClick: onDismissNotice }, notice),
+
+    createElement('div', { className: 'ddz-table ddz-game-table' },
+      // 顶部揭示的地主底牌
+      createElement('div', { className: 'ddz-top-reveal' },
+        view.landlord !== null
+          ? createElement('div', { key: 'revealed', className: 'ddz-reveal-cards is-revealed', 'aria-label': '已揭示的地主底牌', 'aria-live': 'polite' },
+              ...view.bottom.map((card, i) => createElement('div', {
+                key: i,
+                className: 'ddz-reveal-card',
+                style: { '--ddz-delay': `${i * 45}ms` },
+              }, createElement(CardView, { card }))),
+            )
+          : createElement('div', { key: 'hidden', className: 'ddz-reveal-cards ddz-reveal-back-set', 'aria-label': '地主底牌待揭示' },
+              ...[0, 1, 2].map((i) => createElement('div', {
+                key: i,
+                className: 'ddz-reveal-card',
+                style: { '--ddz-delay': `${i * 45}ms` },
+              }, createElement(CardBack))),
+            ),
+      ),
+      createElement('div', { className: 'ddz-table-middle' },
+        createElement('div', { className: 'ddz-side-zone left' },
+          botA && createElement(SeatPanel, { view, seatView: botA, isTurn: view.current === botA.seat }),
+          botA && createElement(PlayedArea, {
+            seat: botA.seat,
+            cards: playedBySeat[botA.seat],
+            countdownSeconds: view.current === botA.seat && showCountdown ? remainingSeconds : null,
+          }),
+        ),
+        createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
+          createElement('div', { className: 'ddz-table-turn-label' },
+            view.phase === 'playing'
+              ? (isMyTurn ? '轮到你出牌' : '对手出牌中…')
+              : ''),
+        ),
+        createElement('div', { className: 'ddz-side-zone right' },
+          botB && createElement(PlayedArea, {
+            seat: botB.seat,
+            cards: playedBySeat[botB.seat],
+            countdownSeconds: view.current === botB.seat && showCountdown ? remainingSeconds : null,
+          }),
+          botB && createElement(SeatPanel, { view, seatView: botB, isTurn: view.current === botB.seat }),
+        ),
+      ),
+      // 我的手牌与操作
+      createElement('div', { className: 'ddz-human-area', style: { textAlign: 'center' } },
+        createElement(PlayedArea, { seat: view.mySeat, cards: playedBySeat[view.mySeat] }),
+        createElement('div', { className: 'ddz-human-hand-row' },
+          humanView && createElement(SeatPanel, { view, seatView: humanView, isTurn: isMyTurn }),
+          createElement('div', { className: 'ddz-row ddz-hand ddz-folded-cards ddz-human-hand', style: { flexWrap: 'nowrap', gap: 0, paddingBottom: 4 } },
+            ...sortedHand.map((c, i) =>
+              createElement('div', {
+                key: `${c.r}-${c.s}-${i}`,
+                className: 'ddz-hand-card ddz-card-stack-item',
+                style: { '--ddz-delay': `${Math.min(i, 12) * 35}ms` },
+              }, createElement(CardView, {
+                card: c,
+                selected: selected.some((x) => x.r === c.r && x.s === c.s),
+                onClick: () => onToggleCard(c),
+              })),
+            ),
+          ),
+        ),
+        createElement('div', { className: 'ddz-action-dock ddz-row' + (isMyTurn ? ' is-active' : ''), style: { justifyContent: 'center', gap: 10, marginTop: 10 } },
+          view.phase === 'calling'
+            ? (isMyTurn
+                ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
+                    createElement('button', { className: 'ddz-btn', onClick: () => onCall(true) }, '叫地主'),
+                    createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => onCall(false) }, '不叫'),
+                  )
+                : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
+            : (view.phase === 'playing'
+                ? (isMyTurn
+                    ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
+                        createElement('button', { className: 'ddz-btn', disabled: !canPlaySelected(), onClick: onPlay }, '出牌'),
+                        createElement('div', { className: 'ddz-action-hint' },
+                          notice && createElement('div', { className: 'ddz-action-bubble', role: 'status', onClick: onDismissNotice }, notice),
+                          createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onHint }, '提示'),
+                        ),
+                        createElement('button', { className: 'ddz-btn ddz-btn-ghost', disabled: !canPass, onClick: onPass }, '过'),
+                        isMyTurn && showCountdown && createElement('span', {
+                          className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
+                          'aria-live': 'polite',
+                        }, `${remainingSeconds}s`),
+                      )
+                    : createElement('span', { className: 'ddz-action-status ddz-turn' }, '对手思考中…'))
+                : null),
+        ),
+      ),
+    ),
+  )
+}
+
+function SeatPanel(props: { view: TableView; seatView: SeatView; isTurn: boolean }) {
+  const { view, seatView, isTurn } = props
+  const roundMultiplier = view.phase === 'calling' ? view.callMultiplier : view.multiplier
+  const statusLabel = seatView.isHuman ? `倍率 ×${roundMultiplier}` : seatView.handCount + ' 张手牌'
+  const statusClass = seatView.isHuman ? 'ddz-multiplier' : 'ddz-card-count'
+  return createElement('div', { className: 'ddz-seat' },
+    createElement('div', { className: 'ddz-seat-identity' },
+      createElement(PlayerRank, { tokenBalance: seatView.tokenBalance }),
+      createElement('div', { className: 'ddz-seat-chip' + (isTurn ? ' is-turn' : '') },
+        createElement(Avatar, { avatarId: seatView.avatarId, size: 32 }),
+        createElement('div', { className: 'ddz-seat-copy' },
+          createElement('div', { className: 'ddz-seat-name', style: { gap: 6 } },
+            createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, seatView.nickname),
+            seatView.role && createElement(RoleBadge, { role: seatView.role }),
+          ),
+          createElement('div', { className: 'ddz-seat-meta' }, `Token ${formatTokenCount(seatView.tokenBalance)}`),
+        ),
+      ),
+    ),
+    createElement('div', { className: 'ddz-seat-cards' },
+      createElement('span', { className: statusClass }, statusLabel),
+    ),
+  )
 }
 
 /* ============================== 本地档案 / 经济 ============================== */
@@ -364,11 +545,20 @@ function Lobby(props: {
   balance: number
   onClaim: () => void
   claimed: boolean
-  onStart: (tableId: string) => void
+  online: boolean
+  matching: boolean
+  matchCount: number
+  onModeChange: (online: boolean) => void
+  onStartLocal: (tableId: string) => void
+  onStartOnline: (tableId: string) => void
+  onCancelMatch: () => void
   onProfileChange: (profile: Profile) => void
   onClose: () => void
 }) {
-  const { profile, balance, onClaim, claimed, onStart, onProfileChange, onClose } = props
+  const {
+    profile, balance, onClaim, claimed, online, matching, matchCount,
+    onModeChange, onStartLocal, onStartOnline, onCancelMatch, onProfileChange, onClose,
+  } = props
   const rank = rankForBalance(balance)
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
@@ -446,7 +636,7 @@ function Lobby(props: {
         ),
         createElement('div', { className: 'ddz-balance ddz-row' },
           createElement('div', { className: 'ddz-balance-copy' },
-            createElement('div', { className: 'ddz-balance-label' }, 'Token 余额'),
+            createElement('div', { className: 'ddz-balance-label' }, 'Token 余额' + (online ? '（在线）' : '')),
             createElement('div', { className: 'ddz-balance-value' }, balance.toLocaleString()),
           ),
           createElement('button', {
@@ -456,10 +646,15 @@ function Lobby(props: {
           }, claimed ? '今日已领' : `签到 +${CONFIG.dailyTokens.toLocaleString()}`),
         ),
       ),
+      createElement('div', { className: 'ddz-mode-switch', role: 'group', 'aria-label': '对局模式' },
+        createElement('button', { type: 'button', className: 'ddz-mode-btn' + (online ? '' : ' on'), onClick: () => onModeChange(false) }, '本地练习'),
+        createElement('button', { type: 'button', className: 'ddz-mode-btn' + (online ? ' on' : ''), onClick: () => onModeChange(true) }, '在线对战'),
+      ),
     ),
     createElement('div', { className: 'ddz-lobby-intro' },
       createElement('div', { className: 'ddz-section-title' }, '选择桌别'),
-      createElement('div', { className: 'ddz-dim ddz-lobby-subtitle' }, '开局自动匹配 2 个本地机器人（M1 本地演示）'),
+      createElement('div', { className: 'ddz-dim ddz-lobby-subtitle' },
+        online ? '在线匹配 3 名真人玩家（Cloudflare 云端对局）' : '开局自动匹配 2 个本地机器人（M1 本地演示）'),
     ),
     createElement('div', { className: 'ddz-table-grid' },
       ...CONFIG.tables.map((t) =>
@@ -477,8 +672,14 @@ function Lobby(props: {
       ),
     ),
     createElement('div', { className: 'ddz-lobby-actions' },
-      createElement('button', { className: 'ddz-btn', disabled: balance < (tableById(tableId)?.base ?? 0), onClick: () => onStart(tableId) },
-        '开始本地对局'),
+      matching
+        ? createElement('button', { className: 'ddz-btn ddz-btn-red', onClick: onCancelMatch },
+            `匹配中… ${matchCount}/3（点击取消）`)
+        : createElement('button', {
+            className: 'ddz-btn',
+            disabled: balance < (tableById(tableId)?.base ?? 0),
+            onClick: () => (online ? onStartOnline(tableId) : onStartLocal(tableId)),
+          }, online ? '开始匹配' : '开始本地对局'),
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onClose }, '最小化'),
     ),
     balance < (tableById(tableId)?.base ?? 0) &&
@@ -487,32 +688,16 @@ function Lobby(props: {
   )
 }
 
-/* ============================== 牌桌 ============================== */
+/* ============================== 本地牌桌（机器人） ============================== */
 
 const HUMAN_SEAT: Seat = 0
-
-interface SeatView {
-  seat: Seat
-  nickname: string
-  avatarId: string
-  isHuman: boolean
-  tokenBalance: number
-}
-
-const SEATS: SeatView[] = [
-  { seat: 0, nickname: '你', avatarId: 'default-01', isHuman: true, tokenBalance: 0 },
-  { seat: 1, nickname: '机器人·蓝', avatarId: 'default-01', isHuman: false, tokenBalance: 35_800_000 },
-  { seat: 2, nickname: '机器人·黑', avatarId: 'default-02', isHuman: false, tokenBalance: 24_200_000 },
+const LOCAL_SEAT_META = [
+  { nickname: '你', avatarId: 'default-01', tokenBalance: 0 },
+  { nickname: '机器人·蓝', avatarId: 'default-01', tokenBalance: 35_800_000 },
+  { nickname: '机器人·黑', avatarId: 'default-02', tokenBalance: 24_200_000 },
 ]
 
-type PlayedBySeat = [Card[] | null, Card[] | null, Card[] | null]
-
-function botCallDecision(hand: Card[], random: () => number): boolean {
-  const strong = hand.filter((x) => x.r >= 12).length >= 1 || hand.filter((x) => x.r >= 9).length >= 3
-  return strong || random() < 0.3
-}
-
-function Table(props: {
+function LocalTable(props: {
   tableId: string
   base: number
   profile: Profile
@@ -528,12 +713,13 @@ function Table(props: {
   const [notice, setNotice] = useState<string | null>(null)
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null)
   const [clock, setClock] = useState(() => Date.now())
-  const [playedBySeat, setPlayedBySeat] = useState<PlayedBySeat>(() => [null, null, null])
 
-  const humanHand = state.hands[HUMAN_SEAT]!
-  const sortedHand = useMemo(() => sortHand(humanHand), [humanHand])
+  const seatMeta = useMemo(() => LOCAL_SEAT_META.map((m, i) => i === HUMAN_SEAT
+    ? { ...m, nickname: profile.nickname, avatarId: profile.avatarId, tokenBalance: balance }
+    : m), [profile.nickname, profile.avatarId, balance])
+  const view = useMemo(() => tableViewFromEngine(state, HUMAN_SEAT, seatMeta), [state, seatMeta])
 
-  // 每次进入出牌阶段或轮转座位时，重置 25 秒出牌计时。
+  // 每次进入出牌阶段或轮转座位时，重置 25 秒出牌计时
   useEffect(() => {
     if (state.phase !== 'playing' || state.finished) {
       setTurnStartedAt(null)
@@ -550,7 +736,7 @@ function Table(props: {
     return () => window.clearInterval(timer)
   }, [state.phase, state.finished, turnStartedAt])
 
-  // 本地演示中超时自动处理，避免玩家一直卡住牌局。
+  // 本地演示中超时自动处理，避免玩家一直卡住牌局
   useEffect(() => {
     if (state.phase !== 'playing' || state.current !== HUMAN_SEAT || state.finished || turnStartedAt === null) return
     const timer = window.setTimeout(() => {
@@ -569,27 +755,6 @@ function Table(props: {
     return () => window.clearTimeout(timer)
   }, [state.phase, state.current, state.finished, state.lastPlay, turnStartedAt])
 
-  // 每位玩家保留本轮最近一次出的牌，分别显示在自己的前方区域。
-  useEffect(() => {
-    if (state.phase === 'calling' || state.redeal) {
-      setPlayedBySeat([null, null, null])
-      return
-    }
-    if (state.lastPlayCards === null) {
-      if (state.lastActor !== null && state.lastPlay === null) setPlayedBySeat([null, null, null])
-      return
-    }
-    if (state.lastActor === null) return
-    const actor = state.lastActor
-    const cards = state.lastPlayCards
-    setPlayedBySeat((previous) => {
-      if (previous[actor] === cards) return previous
-      const next = [...previous] as PlayedBySeat
-      next[actor] = cards
-      return next
-    })
-  }, [state.phase, state.redeal, state.lastActor, state.lastPlay, state.lastPlayCards])
-
   // 机器人自动行动
   useEffect(() => {
     if (state.finished || state.redeal || state.phase === 'settled') return
@@ -597,7 +762,7 @@ function Table(props: {
     const timer = window.setTimeout(() => {
       const seat = state.current
       if (state.phase === 'calling') {
-        const call = botCallDecision(state.hands[seat]!, randomRef.current)
+        const call = botCall(state.hands[seat]!, randomRef.current)
         setState((s) => {
           try { return applyAction(s, { type: 'call', seat, call }) } catch { return s }
         })
@@ -644,14 +809,6 @@ function Table(props: {
     })
   }
 
-  const canPlay = (): boolean => {
-    if (state.phase !== 'playing' || state.current !== HUMAN_SEAT || selected.length === 0) return false
-    const play = classify(selected)
-    if (!play) return false
-    if (!canBeat(play, state.lastPlay)) return false
-    return selected.every((c) => humanHand.some((x) => x.r === c.r && x.s === c.s))
-  }
-
   const humanAct = (action: { type: 'play'; cards: Card[] } | { type: 'pass' } | { type: 'call'; call: boolean }) => {
     try {
       if (action.type === 'call') {
@@ -672,7 +829,7 @@ function Table(props: {
 
   const doHint = () => {
     if (state.phase !== 'playing' || state.current !== HUMAN_SEAT) return
-    const h = hintPlay(humanHand, state.lastPlay)
+    const h = hintPlay(state.hands[HUMAN_SEAT]!, state.lastPlay)
     if (!h) {
       setNotice('没有能压过的牌，过吧')
       return
@@ -680,168 +837,144 @@ function Table(props: {
     setSelected(h)
   }
 
-  const isMyTurn = state.phase === 'calling' ? state.callOrder[state.callActor] === HUMAN_SEAT : state.current === HUMAN_SEAT
-
-  const seatViews = useMemo(() => SEATS.map((view) => view.seat === HUMAN_SEAT
-    ? { ...view, nickname: profile.nickname, avatarId: profile.avatarId, tokenBalance: balance }
-    : view), [profile.avatarId, profile.nickname, balance])
-  const humanView = seatViews[HUMAN_SEAT]!
-  const otherSeats = seatViews.filter((s) => s.seat !== HUMAN_SEAT)
-  const [botA, botB] = otherSeats
-  const currentSeat = state.current
-  const hasConfirmedLandlord = state.phase !== 'calling' && state.landlord !== null
   const remainingMs = state.phase === 'playing' && turnStartedAt !== null
     ? Math.max(0, CONFIG.turnTimeoutMs - (clock - turnStartedAt))
     : null
   const remainingSeconds = remainingMs === null ? null : Math.ceil(remainingMs / 1000)
-  const showCountdown = remainingSeconds !== null && remainingSeconds > 0
 
-  return createElement('div', { className: 'ddz-body ddz-table-screen' },
-    createElement('button', { className: 'ddz-table-exit', onClick: onExit }, '← 退出牌桌'),
-    createElement('div', { className: 'ddz-table-reserved-bar', 'aria-hidden': true }),
-    notice && state.phase !== 'playing' && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
-
-    createElement('div', { className: 'ddz-table ddz-game-table' },
-      // 顶部揭示的地主底牌
-      createElement('div', { className: 'ddz-top-reveal' },
-        hasConfirmedLandlord
-          ? createElement('div', { key: 'revealed', className: 'ddz-reveal-cards is-revealed', 'aria-label': '已揭示的地主底牌', 'aria-live': 'polite' },
-              ...state.bottom.map((card, i) => createElement('div', {
-                key: i,
-                className: 'ddz-reveal-card',
-                style: { '--ddz-delay': `${i * 45}ms` },
-              }, createElement(CardView, { card }))),
-            )
-          : createElement('div', { key: 'hidden', className: 'ddz-reveal-cards ddz-reveal-back-set', 'aria-label': '地主底牌待揭示' },
-              ...[0, 1, 2].map((i) => createElement('div', {
-                key: i,
-                className: 'ddz-reveal-card',
-                style: { '--ddz-delay': `${i * 45}ms` },
-              }, createElement(CardBack))),
-            ),
-      ),
-      createElement('div', { className: 'ddz-table-middle' },
-        createElement('div', { className: 'ddz-side-zone left' },
-          createElement(SeatPanel, {
-            view: botA!, state, isTurn: currentSeat === botA!.seat,
-          }),
-          createElement(PlayedArea, {
-            seat: botA!.seat,
-            cards: playedBySeat[botA!.seat],
-            countdownSeconds: currentSeat === botA!.seat && showCountdown ? remainingSeconds : null,
-          }),
-        ),
-        createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
-          createElement('div', { className: 'ddz-table-turn-label' },
-            state.phase === 'playing'
-              ? (currentSeat === HUMAN_SEAT ? '轮到你出牌' : '对手出牌中…')
-              : ''),
-        ),
-        createElement('div', { className: 'ddz-side-zone right' },
-          createElement(PlayedArea, {
-            seat: botB!.seat,
-            cards: playedBySeat[botB!.seat],
-            countdownSeconds: currentSeat === botB!.seat && showCountdown ? remainingSeconds : null,
-          }),
-          createElement(SeatPanel, {
-            view: botB!, state, isTurn: currentSeat === botB!.seat,
-          }),
-        ),
-      ),
-      // 我的手牌与操作
-      createElement('div', { className: 'ddz-human-area', style: { textAlign: 'center' } },
-        createElement(PlayedArea, { seat: HUMAN_SEAT, cards: playedBySeat[HUMAN_SEAT] }),
-        createElement('div', { className: 'ddz-human-hand-row' },
-          createElement(SeatPanel, {
-            view: humanView, state, isTurn: currentSeat === HUMAN_SEAT,
-          }),
-          createElement('div', { className: 'ddz-row ddz-hand ddz-folded-cards ddz-human-hand', style: { flexWrap: 'nowrap', gap: 0, paddingBottom: 4 } },
-            ...sortedHand.map((c, i) =>
-              createElement('div', {
-                key: `${c.r}-${c.s}-${i}`,
-                className: 'ddz-hand-card ddz-card-stack-item',
-                style: { '--ddz-delay': `${Math.min(i, 12) * 35}ms` },
-              }, createElement(CardView, {
-                card: c,
-                selected: selected.some((x) => x.r === c.r && x.s === c.s),
-                onClick: () => toggleSelect(c),
-              })),
-            ),
-          ),
-        ),
-        createElement('div', { className: 'ddz-action-dock ddz-row' + (isMyTurn ? ' is-active' : ''), style: { justifyContent: 'center', gap: 10, marginTop: 10 } },
-          state.phase === 'calling'
-            ? (isMyTurn
-                ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
-                    createElement('button', { className: 'ddz-btn', onClick: () => humanAct({ type: 'call', call: true }) }, '叫地主'),
-                    createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => humanAct({ type: 'call', call: false }) }, '不叫'),
-                  )
-                : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
-            : (state.phase === 'playing'
-                ? (isMyTurn
-                    ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
-                        createElement('button', { className: 'ddz-btn', disabled: !canPlay(), onClick: () => humanAct({ type: 'play', cards: selected }) }, '出牌'),
-                        createElement('div', { className: 'ddz-action-hint' },
-                          notice && createElement('div', { className: 'ddz-action-bubble', role: 'status', onClick: () => setNotice(null) }, notice),
-                          createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: doHint }, '提示'),
-                        ),
-                        createElement('button', { className: 'ddz-btn ddz-btn-ghost', disabled: state.lastPlay === null, onClick: () => humanAct({ type: 'pass' }) }, '过'),
-                        isMyTurn && showCountdown && createElement('span', {
-                          className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
-                          'aria-live': 'polite',
-                        }, `${remainingSeconds}s`),
-                      )
-                    : createElement('span', { className: 'ddz-action-status ddz-turn' }, '对手思考中…'))
-                : null),
-        ),
-      ),
-    ),
-  )
+  return createElement(GameTableShell, {
+    view,
+    selected,
+    notice,
+    remainingSeconds,
+    onToggleCard: toggleSelect,
+    onPlay: () => humanAct({ type: 'play', cards: selected }),
+    onPass: () => humanAct({ type: 'pass' }),
+    onHint: doHint,
+    onCall: (call) => humanAct({ type: 'call', call }),
+    onExit,
+    onDismissNotice: () => setNotice(null),
+  })
 }
 
-function SeatPanel(props: { view: SeatView; state: GameState; isTurn: boolean }) {
-  const { view, state, isTurn } = props
-  const handCount = state.hands[view.seat]!.length
-  const role = state.phase !== 'calling' && state.landlord !== null ? roleOf(state, view.seat) : null
-  const roundMultiplier = state.phase === 'calling' ? state.callMultiplier : state.multiplier
-  const statusLabel = view.seat === HUMAN_SEAT ? `倍率 ×${roundMultiplier}` : handCount + ' 张手牌'
-  const statusClass = view.seat === HUMAN_SEAT ? 'ddz-multiplier' : 'ddz-card-count'
-  return createElement('div', { className: 'ddz-seat' },
-    createElement('div', { className: 'ddz-seat-identity' },
-      createElement(PlayerRank, { tokenBalance: view.tokenBalance }),
-      createElement('div', { className: 'ddz-seat-chip' + (isTurn ? ' is-turn' : '') },
-        createElement(Avatar, { avatarId: view.avatarId, size: 32 }),
-        createElement('div', { className: 'ddz-seat-copy' },
-          createElement('div', { className: 'ddz-seat-name', style: { gap: 6 } },
-            createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, view.nickname),
-            role && createElement(RoleBadge, { role }),
-          ),
-          createElement('div', { className: 'ddz-seat-meta' }, `Token ${formatTokenCount(view.tokenBalance)}`),
-        ),
-      ),
-    ),
-    createElement('div', { className: 'ddz-seat-cards' },
-      createElement('span', { className: statusClass }, statusLabel),
-    ),
-  )
+/* ============================== 在线牌桌（真人 PVP） ============================== */
+
+function OnlineTable(props: {
+  roomId: string
+  tableId: string
+  profile: Profile
+  onExit: () => void
+  onSettled: (myDelta: number, balanceAfter: number, winner: string, spring: string, multiplier: number, rake: number) => void
+}) {
+  const { roomId, tableId, profile, onExit, onSettled } = props
+  const [view, setView] = useState<TableView | null>(null)
+  const [selected, setSelected] = useState<Card[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
+  const [clock, setClock] = useState(() => Date.now())
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectRef = useRef(0)
+
+  const send = useCallback((msg: unknown) => {
+    const ws = wsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
+  }, [])
+
+  // 连接 + 消息处理（含简单自动重连）
+  useEffect(() => {
+    let disposed = false
+    let ws: WebSocket | null = null
+    const open = () => {
+      if (disposed) return
+      ws = api.connectRoom(roomId)
+      wsRef.current = ws
+      ws.addEventListener('message', (ev) => {
+        if (disposed) return
+        const msg = JSON.parse(String(ev.data))
+        if (msg.t === 'state') {
+          setView(tableViewFromProtocol(msg.d))
+          setClock(Date.now())
+        } else if (msg.t === 'settle') {
+          onSettled(msg.d.myDelta, msg.d.balance_after, msg.d.winner, msg.d.spring, msg.d.multiplier, msg.d.rake)
+        } else if (msg.t === 'error') {
+          setNotice(msg.d.message)
+        }
+      })
+      ws.addEventListener('close', () => {
+        if (disposed) return
+        if (reconnectRef.current < 3) {
+          reconnectRef.current += 1
+          setNotice(`连接断开，正在重连（${reconnectRef.current}/3）…`)
+          window.setTimeout(open, 1500)
+        } else {
+          setNotice('连接已断开')
+        }
+      })
+    }
+    open()
+    return () => {
+      disposed = true
+      ws?.close()
+    }
+  }, [roomId, onSettled])
+
+  // 倒计时刷新
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const remainingSeconds = view && !view.finished
+    ? Math.max(0, Math.ceil((view.turnStartedAt + view.turnTimeoutMs - clock) / 1000))
+    : null
+
+  const toggleSelect = (card: Card) => {
+    if (!view || view.finished || view.current !== view.mySeat) return
+    setSelected((prev) => {
+      const idx = prev.findIndex((x) => x.r === card.r && x.s === card.s)
+      if (idx >= 0) return prev.filter((_, i) => i !== idx)
+      return [...prev, card]
+    })
+  }
+
+  const doHint = () => {
+    if (!view || view.finished || view.current !== view.mySeat) return
+    const last = view.lastPlayCards && view.lastPlayCards.length > 0 ? classify(view.lastPlayCards) : null
+    const h = hintPlay(view.myHand, last)
+    if (!h) { setNotice('没有能压过的牌，过吧'); return }
+    setSelected(h)
+  }
+
+  if (!view) {
+    return createElement('div', { className: 'ddz-body ddz-table-screen' },
+      createElement('div', { className: 'ddz-table ddz-game-table', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dz-dim)' } },
+        '对局连接中…'),
+    )
+  }
+
+  return createElement(GameTableShell, {
+    view,
+    selected,
+    notice,
+    remainingSeconds,
+    onToggleCard: toggleSelect,
+    onPlay: () => { send({ v: 1, t: 'play', d: { cards: selected } }); setSelected([]) },
+    onPass: () => send({ v: 1, t: 'pass', d: {} }),
+    onHint: doHint,
+    onCall: (call) => send({ v: 1, t: 'call', d: { call } }),
+    onExit,
+    onDismissNotice: () => setNotice(null),
+  })
 }
 
 /* ============================== 结算 ============================== */
 
 function Settle(props: {
-  result: {
-    deltas: [number, number, number]
-    multiplier: number
-    winner: string
-    spring: string
-    landlord: Seat
-    rake: number
-  }
+  result: { myDelta: number; multiplier: number; winner: string; spring: string; rake: number }
   balance: number
   onExit: () => void
 }) {
   const { result, balance, onExit } = props
-  const myDelta = result.deltas[HUMAN_SEAT]
+  const myDelta = result.myDelta
   const win = myDelta > 0
   return createElement('div', { className: 'ddz-settle ddz-body' },
     createElement('div', { className: 'ddz-big', style: { color: win ? 'var(--dz-gold)' : 'var(--dz-red)' } },
@@ -866,13 +999,55 @@ export function DoudizhuApp() {
   const [claimed, setClaimed] = useState(() => localStorage.getItem('ddz:claim') === todayKey())
   const [screen, setScreen] = useState<'lobby' | 'table' | 'settle'>('lobby')
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
-  const [result, setResult] = useState<{
-    deltas: [number, number, number]; multiplier: number; winner: string; spring: string; landlord: Seat; rake: number
-  } | null>(null)
+  const [result, setResult] = useState<{ myDelta: number; multiplier: number; winner: string; spring: string; rake: number } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [online, setOnline] = useState(false)
+  const [matching, setMatching] = useState(false)
+  const [matchCount, setMatchCount] = useState(0)
+  const [roomId, setRoomId] = useState<string | null>(null)
+  const pollTimerRef = useRef<number | null>(null)
 
-  const claim = () => {
+  // 切换到在线模式：换取 token 并同步服务端资料/余额
+  const enterOnline = async () => {
+    setOnline(true)
+    try {
+      await api.auth(profile.uid)
+      const me = await api.getMe()
+      setBalance(me.player.balance)
+      setProfile((p) => ({ ...p, nickname: me.player.nickname, avatarId: me.player.avatarId }))
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : '在线连接失败')
+    }
+  }
+
+  const leaveOnline = () => {
+    setOnline(false)
+    if (matching) cancelMatch()
+    setBalance(loadBalance())
+  }
+
+  const claim = async () => {
     if (claimed) return
+    if (online) {
+      try {
+        const r = await api.claimDaily()
+        setBalance(r.balance)
+        setClaimed(true)
+        setNotice(`每日签到 +${r.amount.toLocaleString()}`)
+      } catch (e) {
+        // 已领取 → 同步服务端状态
+        if ((e instanceof Error && e.message.includes('already claimed')) || String(e).includes('409')) {
+          setClaimed(true)
+          try {
+            const me = await api.getMe()
+            setBalance(me.player.balance)
+          } catch { /* ignore */ }
+        } else {
+          setNotice(e instanceof Error ? e.message : '签到失败')
+        }
+      }
+      return
+    }
     const next = balance + CONFIG.dailyTokens
     setBalance(next)
     saveBalance(next)
@@ -881,46 +1056,113 @@ export function DoudizhuApp() {
     setNotice(`每日签到 +${CONFIG.dailyTokens.toLocaleString()}`)
   }
 
-  const updateProfile = (next: Profile) => {
-    const normalized = { ...next, nickname: limitNickname(next.nickname) }
-    setProfile(normalized)
-    saveProfile(normalized)
-  }
-
-  const start = (tid: string) => {
+  const startLocal = (tid: string) => {
     setTableId(tid)
     setResult(null)
     setScreen('table')
   }
 
-  const onFinished = useCallback((
-    deltas: [number, number, number], multiplier: number, winner: string, spring: string, landlord: Seat, rake: number,
+  const startOnline = async (tid: string) => {
+    setTableId(tid)
+    setResult(null)
+    setMatching(true)
+    setMatchCount(1)
+    try {
+      const r = await api.joinQueue(tid)
+      if (r.status === 'matched') {
+        setMatchCount(3)
+        setRoomId(r.roomId)
+        setMatching(false)
+        setScreen('table')
+        return
+      }
+      setMatchCount(r.count)
+      // 轮询等待匹配
+      pollTimerRef.current = window.setInterval(async () => {
+        try {
+          const s = await api.pollQueue(tid)
+          if (s.status === 'matched') {
+            if (pollTimerRef.current !== null) window.clearInterval(pollTimerRef.current)
+            setRoomId(s.roomId)
+            setMatching(false)
+            setScreen('table')
+          } else {
+            setMatchCount(s.count)
+          }
+        } catch { /* 网络抖动忽略 */ }
+      }, 2000)
+    } catch (e) {
+      setMatching(false)
+      setNotice(e instanceof Error ? e.message : '匹配失败')
+    }
+  }
+
+  const cancelMatch = () => {
+    if (pollTimerRef.current !== null) {
+      window.clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+    setMatching(false)
+    if (online) api.leaveQueue(tableId).catch(() => undefined)
+  }
+
+  const updateProfile = (next: Profile) => {
+    const normalized = { ...next, nickname: limitNickname(next.nickname) }
+    setProfile(normalized)
+    saveProfile(normalized)
+    if (online) {
+      api.updateProfile(normalized.nickname, normalized.avatarId).catch(() => undefined)
+    }
+  }
+
+  const onFinishedLocal = useCallback((
+    deltas: [number, number, number], multiplier: number, winner: string, spring: string, _landlord: Seat, rake: number,
   ) => {
-    setResult({ deltas, multiplier, winner, spring, landlord, rake })
+    setResult({ myDelta: deltas[HUMAN_SEAT], multiplier, winner, spring, rake })
     const next = Math.max(0, balance + deltas[HUMAN_SEAT])
     setBalance(next)
     saveBalance(next)
     setScreen('settle')
   }, [balance])
 
+  const onSettledOnline = useCallback((
+    myDelta: number, balanceAfter: number, winner: string, spring: string, multiplier: number, rake: number,
+  ) => {
+    setResult({ myDelta, multiplier, winner, spring, rake })
+    setBalance(balanceAfter)
+    setScreen('settle')
+  }, [])
+
+  const exitTable = () => {
+    setRoomId(null)
+    setScreen('lobby')
+  }
+
   return createElement('div', { className: 'ddz-root' },
     createElement('style', null, STYLE),
     notice && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
     createElement('button', { className: 'ddz-float', onClick: () => setOpen((v) => !v) },
       createElement('span', { className: 'ddz-float-title' }, '🃏 斗地主'),
-      createElement('span', { className: 'ddz-float-subtitle' }, '等待中，来一把')),
+      createElement('span', { className: 'ddz-float-subtitle' }, online ? '在线对战' : '等待中，来一把')),
     open && createElement('div', { className: 'ddz-overlay', onClick: (e: { target: unknown; currentTarget: unknown }) => { if (e.target === e.currentTarget) setOpen(false) } },
       createElement('div', { className: 'ddz-modal' },
         createElement('button', { className: 'ddz-corner-close', 'aria-label': '关闭斗地主', onClick: () => setOpen(false) }, '×'),
         screen === 'lobby' && createElement(Lobby, {
-          profile, balance, claimed, onClaim: claim,
-          onStart: start, onProfileChange: updateProfile, onClose: () => setOpen(false),
+          profile, balance, claimed, online, matching, matchCount,
+          onClaim: claim,
+          onModeChange: (nextOnline) => { if (nextOnline === online) return; if (nextOnline) enterOnline(); else leaveOnline() },
+          onStartLocal: startLocal,
+          onStartOnline: startOnline,
+          onCancelMatch: cancelMatch,
+          onProfileChange: updateProfile,
+          onClose: () => setOpen(false),
         }),
-        screen === 'table' && createElement(Table, {
-          tableId, base: tableById(tableId)?.base ?? 0, profile, balance,
-          onExit: () => setScreen('lobby'),
-          onFinished,
-        }),
+        screen === 'table' && (online && roomId
+          ? createElement(OnlineTable, { roomId, tableId, profile, onExit: exitTable, onSettled: onSettledOnline })
+          : createElement(LocalTable, {
+              tableId, base: tableById(tableId)?.base ?? 0, profile, balance,
+              onExit: exitTable, onFinished: onFinishedLocal,
+            })),
         screen === 'settle' && result && createElement(Settle, {
           result, balance, onExit: () => setScreen('lobby'),
         }),

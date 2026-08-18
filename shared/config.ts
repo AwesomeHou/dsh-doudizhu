@@ -22,7 +22,7 @@ export const CONFIG = {
   /** 平台抽水率 */
   rakeRate: 0.05,
   /** 每手出牌倒计时（ms） */
-  turnTimeoutMs: 20_000,
+  turnTimeoutMs: 25_000,
   /** 桌别 */
   tables: [
     { id: 'novice', label: '新手桌', base: 10_000, minBalance: 200_000 },

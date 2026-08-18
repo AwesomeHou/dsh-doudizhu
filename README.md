@@ -46,7 +46,17 @@ dsh-doudizhu/
 
 ## 安装（给使用者）
 
-仓库公开，构建产物 `lib/` 已随仓库提交，任何 DSH 用户可直接从 GitHub 安装：
+仓库公开，构建产物 `lib/` 已随仓库提交，任何 DSH 用户可直接从 GitHub 安装。
+
+**前置**：`dsh plugin` 命令依赖 **pnpm 在 PATH 中**（DSH 源码直接 `spawnSync("pnpm", ...)`）。没有 pnpm 会报 `'pnpm' 不是内部或外部命令`。安装 pnpm（二选一）：
+
+```bash
+npm install -g pnpm        # 已装 Node/npm 时
+# 或
+corepack enable pnpm       # Node 自带的 corepack
+```
+
+然后安装插件：
 
 ```bash
 # 方式一（推荐）：GitHub 安装
@@ -62,6 +72,7 @@ dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu
 > - 插件的在线对战依赖部署在 Cloudflare 的后端（客户端内置默认 API 地址），无需使用者自建后端。
 > - 本地机器人对局完全离线可用（M1 模式）。
 > - 安装即把插件加入 profile 的 bundle 栈（`cordis.patch.yml`），卸载用 `dsh plugin --profile web remove dsh-doudizhu`。
+> - 若安装报 `git-hosted plugins build on install via their prepare script ... allowBuilds` 的提示：那是 DSH 对 git 安装失败的**通用诊断**。本插件**没有 prepare/install 构建脚本**（`lib/` 预构建随包分发），pnpm 不会对它做构建拦截，因此无需添加 allowBuilds 条目；只要 pnpm 可用、重跑命令即可成功。
 
 ## 本地开发（给维护者）
 

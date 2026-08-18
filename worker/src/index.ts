@@ -5,9 +5,9 @@
  */
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
-import { rankForBalance, tableById } from '../../shared/config.ts'
+import { rankForBalance, tableById, CONFIG } from '../../shared/config.ts'
 import { verifyToken, signToken, bearerToken, type AuthPayload } from './auth.ts'
-import { addLedger, getLedger, getPlayer, hasClaimed, insertClaim, updateProfile, upsertPlayer, type PlayerRow } from './db.ts'
+import { addLedger, getLedger, getPlayer, hasClaimed, hasRescued, insertClaim, insertRescue, updateProfile, upsertPlayer, type PlayerRow } from './db.ts'
 import { joinQueue, leaveQueue, pollStatus, getRoomMeta, clearRoom } from './queue.ts'
 import { ingestAnalytics, adminStats, type AnalyticsEvent } from './analytics.ts'
 import type { Env } from './types.ts'
@@ -97,6 +97,22 @@ app.get('/api/ledger', async (c) => {
   const limit = Math.min(Number(c.req.query('limit') ?? 50) || 50, 200)
   const ledger = await getLedger(c.env, payload.uid, limit)
   return c.json({ ledger })
+})
+
+// ---- 破产救济 ----
+app.post('/api/rescue', async (c) => {
+  let payload: AuthPayload
+  try { payload = await auth(c) } catch { return fail(c, 401, 'unauthorized') }
+  const player = await getPlayer(c.env, payload.uid)
+  if (!player) return fail(c, 404, 'player not found')
+  const minBalance = Math.min(...CONFIG.tables.map((t) => t.minBalance))
+  if (player.balance >= minBalance) return fail(c, 403, 'balance not low enough')
+  const day = dayKeyUTC8()
+  if (await hasRescued(c.env, payload.uid, day)) return fail(c, 409, 'already rescued today')
+  const amount = CONFIG.rescueTokens
+  await insertRescue(c.env, payload.uid, day, amount)
+  const balance = await addLedger(c.env, payload.uid, 'rescue', amount, `rescue:${day}`)
+  return c.json({ amount, balance })
 })
 
 // ---- 匹配 ----

@@ -86,6 +86,15 @@ export async function insertClaim(env: Env, uid: string, day: string, amount: nu
   await env.DB.prepare('INSERT INTO daily_claims (uid, day, amount) VALUES (?1, ?2, ?3)').bind(uid, day, amount).run()
 }
 
+export async function hasRescued(env: Env, uid: string, day: string): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT 1 FROM rescue_claims WHERE uid = ?1 AND day = ?2').bind(uid, day).first()
+  return row !== null
+}
+
+export async function insertRescue(env: Env, uid: string, day: string, amount: number): Promise<void> {
+  await env.DB.prepare('INSERT INTO rescue_claims (uid, day, amount) VALUES (?1, ?2, ?3)').bind(uid, day, amount).run()
+}
+
 export async function recordMatch(env: Env, m: {
   id: string
   tableId: string

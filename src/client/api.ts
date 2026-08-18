@@ -62,6 +62,11 @@ export function claimDaily(): Promise<{ amount: number; balance: number }> {
   return req('/api/daily', { method: 'POST' })
 }
 
+/** 破产救济（每日一次，余额低于最低桌门槛时可领） */
+export function rescue(): Promise<{ amount: number; balance: number }> {
+  return req('/api/rescue', { method: 'POST' })
+}
+
 export type QueueResult =
   | { status: 'waiting'; count: number }
   | { status: 'matched'; roomId: string }

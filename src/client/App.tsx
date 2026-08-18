@@ -548,6 +548,8 @@ function Lobby(props: {
   online: boolean
   matching: boolean
   matchCount: number
+  rescued: boolean
+  onRescue: () => void
   onModeChange: (online: boolean) => void
   onStartLocal: (tableId: string) => void
   onStartOnline: (tableId: string) => void
@@ -556,10 +558,11 @@ function Lobby(props: {
   onClose: () => void
 }) {
   const {
-    profile, balance, onClaim, claimed, online, matching, matchCount,
+    profile, balance, onClaim, claimed, online, matching, matchCount, rescued, onRescue,
     onModeChange, onStartLocal, onStartOnline, onCancelMatch, onProfileChange, onClose,
   } = props
   const rank = rankForBalance(balance)
+  const minBalance = Math.min(...CONFIG.tables.map((t) => t.minBalance))
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [editingNickname, setEditingNickname] = useState(false)
@@ -644,6 +647,12 @@ function Lobby(props: {
             disabled: claimed,
             onClick: onClaim,
           }, claimed ? '今日已领' : `签到 +${CONFIG.dailyTokens.toLocaleString()}`),
+        ),
+        online && balance < minBalance && createElement('div', { className: 'ddz-row', style: { marginTop: 12 } },
+          rescued
+            ? createElement('span', { className: 'ddz-dim ddz-helper' }, '今日救济金已领')
+            : createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onRescue },
+                `领救济金 +${CONFIG.rescueTokens.toLocaleString()}`),
         ),
       ),
       createElement('div', { className: 'ddz-mode-switch', role: 'group', 'aria-label': '对局模式' },
@@ -1005,6 +1014,7 @@ export function DoudizhuApp() {
   const [matching, setMatching] = useState(false)
   const [matchCount, setMatchCount] = useState(0)
   const [roomId, setRoomId] = useState<string | null>(null)
+  const [rescued, setRescued] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
 
   // 切换到在线模式：换取 token 并同步服务端资料/余额
@@ -1054,6 +1064,23 @@ export function DoudizhuApp() {
     localStorage.setItem('ddz:claim', todayKey())
     setClaimed(true)
     setNotice(`每日签到 +${CONFIG.dailyTokens.toLocaleString()}`)
+  }
+
+  const rescue = async () => {
+    if (rescued || !online) return
+    try {
+      const r = await api.rescue()
+      setBalance(r.balance)
+      setRescued(true)
+      setNotice(`救济金 +${r.amount.toLocaleString()}`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : ''
+      if (msg.includes('already rescued') || String(e).includes('409')) {
+        setRescued(true)
+      } else if (!msg.includes('not low enough')) {
+        setNotice(msg || '领取失败')
+      }
+    }
   }
 
   const startLocal = (tid: string) => {
@@ -1148,8 +1175,9 @@ export function DoudizhuApp() {
       createElement('div', { className: 'ddz-modal' },
         createElement('button', { className: 'ddz-corner-close', 'aria-label': '关闭斗地主', onClick: () => setOpen(false) }, '×'),
         screen === 'lobby' && createElement(Lobby, {
-          profile, balance, claimed, online, matching, matchCount,
+          profile, balance, claimed, online, matching, matchCount, rescued,
           onClaim: claim,
+          onRescue: rescue,
           onModeChange: (nextOnline) => { if (nextOnline === online) return; if (nextOnline) enterOnline(); else leaveOnline() },
           onStartLocal: startLocal,
           onStartOnline: startOnline,

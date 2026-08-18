@@ -191,6 +191,12 @@ const STYLE = `
 .ddz-latency b{font-variant-numeric:tabular-nums;color:var(--dz-text);font-weight:700}
 .ddz-latency-sep{margin:0 2px;opacity:.5}
 .ddz-lobby-version{flex:0 0 auto;text-align:center;padding:8px 0 2px;font-size:11px;color:var(--dz-dim)}
+.ddz-lobby-latency{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dz-dim);margin-top:8px}
+.ddz-lobby-latency .ddz-latency-dot{width:8px;height:8px}
+.ddz-lobby-latency.good .ddz-latency-dot{background:#2f9e62}
+.ddz-lobby-latency.mid .ddz-latency-dot{background:#e6a23c}
+.ddz-lobby-latency.bad .ddz-latency-dot{background:var(--dz-red)}
+.ddz-lobby-latency b{font-variant-numeric:tabular-nums;color:var(--dz-text)}
 .ddz-dialog{position:fixed;inset:0;z-index:2147483000;background:rgba(28,32,42,.5);display:flex;align-items:center;justify-content:center;animation:ddz-overlay-in .2s ease-out both}
 .ddz-dialog-card{width:min(430px,92vw);background:var(--dz-panel);border:1px solid var(--dz-line);border-radius:16px;padding:22px;box-shadow:0 18px 42px rgba(26,32,47,.25)}
 .ddz-dialog-title{font-size:17px;font-weight:800;margin:0 0 10px}
@@ -563,6 +569,7 @@ function Lobby(props: {
   matching: boolean
   matchCount: number
   rescued: boolean
+  lobbyLatency: number | null
   onRescue: () => void
   onModeChange: (online: boolean) => void
   onStartLocal: (tableId: string) => void
@@ -573,10 +580,12 @@ function Lobby(props: {
 }) {
   const {
     profile, balance, onClaim, claimed, online, matching, matchCount, rescued, onRescue,
+    lobbyLatency,
     onModeChange, onStartLocal, onStartOnline, onCancelMatch, onProfileChange, onClose,
   } = props
   const rank = rankForBalance(balance)
   const minBalance = Math.min(...CONFIG.tables.map((t) => t.minBalance))
+  const lobbyLatencyClass = lobbyLatency === null ? '' : lobbyLatency < 100 ? ' good' : lobbyLatency < 250 ? ' mid' : ' bad'
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [editingNickname, setEditingNickname] = useState(false)
@@ -673,6 +682,13 @@ function Lobby(props: {
       createElement('div', { className: 'ddz-mode-switch', role: 'group', 'aria-label': '对局模式' },
         createElement('button', { type: 'button', className: 'ddz-mode-btn' + (online ? '' : ' on'), onClick: () => onModeChange(false) }, '本地练习'),
         createElement('button', { type: 'button', className: 'ddz-mode-btn' + (online ? ' on' : ''), onClick: () => onModeChange(true) }, '在线对战'),
+      ),
+      online && createElement('div', { className: 'ddz-lobby-latency' + lobbyLatencyClass, role: 'status', title: '到在线服务器的网络延迟' },
+        createElement('span', { className: 'ddz-latency-dot' }),
+        createElement('span', null, '网络延迟 '),
+        lobbyLatency === null
+          ? createElement('span', null, '—')
+          : createElement('b', null, `${lobbyLatency}ms`),
       ),
     ),
     createElement('div', { className: 'ddz-lobby-intro' },
@@ -1074,9 +1090,34 @@ export function DoudizhuApp() {
   const [matchCount, setMatchCount] = useState(0)
   const [roomId, setRoomId] = useState<string | null>(null)
   const [rescued, setRescued] = useState(false)
+  const [lobbyLatencyMs, setLobbyLatencyMs] = useState<number | null>(null)
   const [versionError, setVersionError] = useState<{ clientProtocol: number; serverProtocol: number; serverVersion: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
+
+  // 在线大厅的网络延迟探测（HTTP RTT 到 /api/health）
+  useEffect(() => {
+    if (!online) {
+      setLobbyLatencyMs(null)
+      return
+    }
+    let disposed = false
+    const ping = async () => {
+      const start = Date.now()
+      try {
+        const h = await api.health()
+        if (!disposed && h.ok) setLobbyLatencyMs(Date.now() - start)
+      } catch {
+        if (!disposed) setLobbyLatencyMs(null)
+      }
+    }
+    ping()
+    const timer = window.setInterval(ping, 3000)
+    return () => {
+      disposed = true
+      window.clearInterval(timer)
+    }
+  }, [online])
 
   const copyUpdateCmd = () => {
     const cmd = 'dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu'
@@ -1267,7 +1308,7 @@ export function DoudizhuApp() {
       createElement('div', { className: 'ddz-modal' },
         createElement('button', { className: 'ddz-corner-close', 'aria-label': '关闭斗地主', onClick: () => setOpen(false) }, '×'),
         screen === 'lobby' && createElement(Lobby, {
-          profile, balance, claimed, online, matching, matchCount, rescued,
+          profile, balance, claimed, online, matching, matchCount, rescued, lobbyLatency: lobbyLatencyMs,
           onClaim: claim,
           onRescue: rescue,
           onModeChange: (nextOnline) => { if (nextOnline === online) return; if (nextOnline) enterOnline(); else leaveOnline() },

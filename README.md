@@ -44,14 +44,33 @@ dsh-doudizhu/
 - **后端**：Cloudflare Workers（Hono）+ Durable Objects（房间/实时同步）+ D1（持久化）+ KV/R2。
 - **AI（第二阶段）**：牌位由「受控 DSH 客户端」接管，出牌决策走本地 headless 会话。
 
-## 本地环境
+## 安装（给使用者）
+
+仓库公开，构建产物 `lib/` 已随仓库提交，任何 DSH 用户可直接从 GitHub 安装：
+
+```bash
+# 方式一（推荐）：GitHub 安装
+dsh plugin --profile web add github:AwesomeHou/dsh-doudizhu
+
+# 若提示 workspace root 报错（ERR_PNPM_ADDING_TO_ROOT），加 -w：
+dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu
+```
+
+装完后**重启 `dsh web`**，刷新界面即可在右下角看到「🃏 斗地主」入口。
+
+> 说明：
+> - 插件的在线对战依赖部署在 Cloudflare 的后端（客户端内置默认 API 地址），无需使用者自建后端。
+> - 本地机器人对局完全离线可用（M1 模式）。
+> - 安装即把插件加入 profile 的 bundle 栈（`cordis.patch.yml`），卸载用 `dsh plugin --profile web remove dsh-doudizhu`。
+
+## 本地开发（给维护者）
 
 - Node.js ≥ 20，npm。
 - 安装依赖：`npm install`
 - 类型检查：`npm run typecheck`
-- 单元测试：`npm test`
-- 构建插件：`npm run build`
-- 插件安装（进入开发期后）：`dsh plugin --profile web add AwesomeHou/dsh-doudizhu`
+- 单元测试：`npm test`；本地/线上 PVP 联调：`npm run test:e2e`（需 `cd worker && npx wrangler dev`）
+- 构建插件：`npm run build`（**改完源码必须重新构建，并把 `lib/` 一并提交**，分发依赖随仓库携带的构建产物）
+- 插件安装（本地开发联调）：`dsh plugin --profile web add -w link:E:/dsh-plugin/dsh-doudizhu`
 - 后端本地调试：`cd worker && wrangler dev`（需 Cloudflare 账号与 wrangler 配置）。
 
 ## 许可

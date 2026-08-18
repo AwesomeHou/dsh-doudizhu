@@ -14,7 +14,7 @@ import { settle } from '../../shared/engine/scoring.ts'
 import { classify, hintPlay } from '../../shared/engine/valid.ts'
 import { canBeat } from '../../shared/engine/compare.ts'
 import { botMove } from '../../shared/engine/bot.ts'
-import { RANK_NAMES, SUIT_SYMBOLS, type Card, type Role, type Seat } from '../../shared/engine/types.ts'
+import { KIND_NAMES, RANK_NAMES, SUIT_SYMBOLS, type Card, type Role, type Seat } from '../../shared/engine/types.ts'
 import { deepseekBlueUrl, deepseekBlackUrl } from './brandAssets.ts'
 
 /* ============================== 样式 ============================== */
@@ -77,8 +77,25 @@ const STYLE = `
 .ddz-lobby-top{display:flex;justify-content:flex-start;align-items:flex-start;gap:24px;margin-bottom:46px}
 .ddz-lobby-profile-stack{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
 .ddz-profile{gap:12px}
+.ddz-avatar-picker-anchor{position:relative;display:flex}
+.ddz-avatar-button{appearance:none;padding:0;border:0;background:transparent;border-radius:50%;display:inline-flex;cursor:pointer}
+.ddz-avatar-button:hover .ddz-avatar{box-shadow:0 0 0 3px rgba(77,107,254,.12)}
+.ddz-avatar-button:focus-visible,.ddz-icon-btn:focus-visible,.ddz-avatar-option:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
+.ddz-avatar-picker{position:absolute;top:calc(100% + 10px);left:0;z-index:4;min-width:168px;padding:10px;border:1px solid var(--dz-line);border-radius:12px;background:#fff;box-shadow:0 10px 24px rgba(26,32,47,.14);animation:ddz-picker-in .18s cubic-bezier(.22,1,.36,1) both}
+.ddz-avatar-picker-title{margin:0 0 8px;padding:0 2px;color:var(--dz-dim);font-size:11px}
+.ddz-avatar-options{display:flex;gap:8px}
+.ddz-avatar-option{appearance:none;display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px;border:1px solid transparent;border-radius:9px;background:#fff;color:var(--dz-dim);font:inherit;font-size:10px;cursor:pointer}
+.ddz-avatar-option:hover{background:#f7f8ff;border-color:#cbd5ff}
+.ddz-avatar-option.selected{border-color:var(--dz-blue);background:#f7f8ff;color:#304bc5;box-shadow:0 0 0 1px var(--dz-blue)}
 .ddz-profile-copy{display:flex;flex-direction:column;gap:2px}
+.ddz-profile-name-row{display:flex;align-items:center;gap:4px}
 .ddz-profile-name{font-size:15px;font-weight:700}
+.ddz-icon-btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--dz-dim);cursor:pointer}
+.ddz-icon-btn:hover{background:#f2f4f8;color:var(--dz-text)}
+.ddz-icon-btn svg{width:14px;height:14px;display:block}
+.ddz-nickname-editor{display:flex;align-items:center;gap:5px}
+.ddz-nickname-input{width:150px;min-width:0;padding:5px 7px;border:1px solid var(--dz-blue);border-radius:6px;color:var(--dz-text);font:inherit;font-size:13px;outline:0}
+.ddz-nickname-editor .ddz-icon-btn{width:22px;height:22px}
 .ddz-profile-uid{font-size:12px}
 .ddz-balance{gap:14px}
 .ddz-balance-copy{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
@@ -109,8 +126,15 @@ const STYLE = `
 .ddz-side-zone{display:grid;align-items:center;gap:18px;min-width:0}
 .ddz-side-zone.left{grid-template-columns:auto minmax(120px,1fr)}
 .ddz-side-zone.right{grid-template-columns:minmax(120px,1fr) auto}
-.ddz-play-area{min-width:0;min-height:96px;width:100%;display:flex;align-items:center;justify-content:center;border:1px solid #e8ebf2;border-radius:14px;background:rgba(255,255,255,.48)}
+.ddz-play-area{position:relative;min-width:0;min-height:96px;width:100%;display:flex;align-items:center;justify-content:center;border:1px solid #e8ebf2;border-radius:14px;background:rgba(255,255,255,.48)}
 .ddz-play-area-cards{display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:nowrap}
+.ddz-play-area-countdown{position:absolute;top:8px;right:8px}
+.ddz-special-play{position:relative;animation:ddz-special-play-in .55s cubic-bezier(.22,1,.36,1) both}
+.ddz-special-bomb{animation-name:ddz-bomb-burst}
+.ddz-special-rocket{animation-name:ddz-rocket-burst}
+.ddz-special-bomb .ddz-card,.ddz-special-rocket .ddz-card{border-color:#e4c56d;box-shadow:0 0 0 2px rgba(150,104,19,.12),0 6px 14px rgba(150,104,19,.18)}
+.ddz-special-label{position:absolute;left:8px;bottom:8px;z-index:2;padding:3px 7px;border-radius:999px;background:#fff;color:var(--dz-gold);border:1px solid #ecd798;font-size:10px;font-weight:800;line-height:14px;box-shadow:0 2px 5px rgba(26,32,47,.1);animation:ddz-special-label-in .3s .08s both}
+.ddz-special-label-rocket{background:#eef1ff;color:#304bc5;border-color:#cbd5ff}
 .ddz-folded-cards .ddz-card-stack-item{position:relative;flex:0 0 auto}
 .ddz-folded-cards .ddz-card-stack-item:not(:first-child){margin-left:-24px}
 .ddz-hand.ddz-folded-cards{flex-wrap:nowrap;gap:0}
@@ -152,19 +176,25 @@ const STYLE = `
 .ddz-seat-meta{font-size:10px;color:var(--dz-dim);white-space:nowrap}
 .ddz-seat-cards{font-size:11px;color:var(--dz-dim)}
 .ddz-card-count{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef1f6}
+.ddz-multiplier{display:inline-block;padding:3px 8px;border-radius:999px;background:#fff7e6;color:var(--dz-gold);font-weight:750;font-variant-numeric:tabular-nums}
 @keyframes ddz-overlay-in{from{opacity:0}to{opacity:1}}
 @keyframes ddz-modal-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes ddz-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes ddz-picker-in{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes ddz-reveal-in{from{opacity:0;transform:translateY(-8px) scale(.94)}to{opacity:1;transform:none}}
 @keyframes ddz-landlord-reveal{from{opacity:.72;transform:translateY(-5px) scale(.97);box-shadow:0 0 0 0 rgba(77,107,254,0)}50%{box-shadow:0 0 0 5px rgba(77,107,254,.12)}to{opacity:1;transform:none;box-shadow:none}}
 @keyframes ddz-landlord-card-reveal{from{opacity:0;transform:rotateY(90deg) translateY(-4px) scale(.9)}to{opacity:1;transform:none}}
 @keyframes ddz-played-in{from{opacity:0;transform:translateY(8px) scale(.94)}to{opacity:1;transform:none}}
 @keyframes ddz-deal-in{from{opacity:0;transform:translateY(-18px) rotate(-3deg) scale(.92)}to{opacity:1;transform:none}}
+@keyframes ddz-special-play-in{from{opacity:0;transform:translateY(10px) scale(.82);filter:drop-shadow(0 0 0 rgba(197,63,77,0))}45%{opacity:1;transform:translateY(-4px) scale(1.04);filter:drop-shadow(0 5px 10px rgba(197,63,77,.18))}to{opacity:1;transform:none;filter:none}}
+@keyframes ddz-bomb-burst{from{opacity:0;transform:translateY(10px) scale(.82);filter:drop-shadow(0 0 0 rgba(150,104,19,0))}35%{opacity:1;transform:translateY(-5px) scale(1.07);filter:drop-shadow(0 0 9px rgba(150,104,19,.45))}62%{transform:translateY(1px) scale(.98);filter:drop-shadow(0 0 4px rgba(150,104,19,.22))}to{opacity:1;transform:none;filter:none}}
+@keyframes ddz-rocket-burst{from{opacity:0;transform:translateY(10px) scale(.82);filter:drop-shadow(0 0 0 rgba(77,107,254,0))}35%{opacity:1;transform:translateY(-6px) scale(1.08);filter:drop-shadow(0 0 11px rgba(77,107,254,.48))}65%{transform:translateY(1px) scale(.98);filter:drop-shadow(0 0 5px rgba(77,107,254,.24))}to{opacity:1;transform:none;filter:none}}
+@keyframes ddz-special-label-in{from{opacity:0;transform:translateY(4px) scale(.9)}to{opacity:1;transform:none}}
 @keyframes ddz-action-ready{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes ddz-turn-pulse{0%,100%{box-shadow:0 2px 6px rgba(26,32,47,.08)}50%{box-shadow:0 0 0 3px rgba(77,107,254,.12),0 3px 8px rgba(77,107,254,.16)}}
 @keyframes ddz-countdown-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 @media (max-width:720px){.ddz-modal{width:100vw;height:100vh;border-radius:0}.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-rank{font-size:16px}.ddz-card-rank.long{font-size:14px}.ddz-card-corner.top{top:4px;left:4px}.ddz-card-corner.bottom{right:4px;bottom:4px}.ddz-folded-cards .ddz-card-stack-item:not(:first-child){margin-left:-20px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}.ddz-float{right:12px;bottom:12px}}
-@media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-float,.ddz-card{transition:none}.ddz-card:hover,.ddz-float:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-overlay,.ddz-modal,.ddz-toast,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-float,.ddz-card{transition:none}.ddz-card:hover,.ddz-float:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-overlay,.ddz-modal,.ddz-toast,.ddz-avatar-picker,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent,.ddz-special-play,.ddz-special-label{animation:none!important}}
 `
 
 /* ============================== 基础组件 ============================== */
@@ -211,6 +241,25 @@ function Avatar({ avatarId, size = 40 }: { avatarId: string; size?: number }) {
   )
 }
 
+function EditIcon() {
+  return createElement('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+    createElement('path', { d: 'M12 20h9' }),
+    createElement('path', { d: 'M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z' }),
+  )
+}
+
+function CheckIcon() {
+  return createElement('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+    createElement('path', { d: 'm5 12 4 4L19 6' }),
+  )
+}
+
+function CloseIcon() {
+  return createElement('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', 'aria-hidden': true },
+    createElement('path', { d: 'M6 6l12 12M18 6 6 18' }),
+  )
+}
+
 function formatTokenCount(value: number): string {
   const abs = Math.abs(value)
   const unit = abs >= 1_000_000_000 ? 'B' : abs >= 1_000_000 ? 'M' : abs >= 1_000 ? 'k' : ''
@@ -231,14 +280,21 @@ function RoleBadge({ role }: { role: Role }) {
   }, landlord ? '地主' : '农民')
 }
 
-function PlayedArea({ seat, cards }: { seat: Seat; cards: Card[] | null }) {
+function PlayedArea({ seat, cards, countdownSeconds = null }: { seat: Seat; cards: Card[] | null; countdownSeconds?: number | null }) {
   const cardKey = cards?.map((card) => `${card.r}-${card.s}`).join('|') ?? 'empty'
+  const play = cards ? classify(cards) : null
+  const isSpecialPlay = play !== null && !['single', 'pair', 'triple'].includes(play.kind)
+  const specialClass = isSpecialPlay && play ? ` ddz-special-play ddz-special-${play.kind}` : ''
   return createElement('div', {
     className: 'ddz-play-area',
-    'aria-label': `${SEATS[seat]!.nickname}出牌区`,
+    'aria-label': `${SEATS[seat]!.nickname}出牌区${play ? `，${KIND_NAMES[play.kind]}` : ''}`,
   },
+  countdownSeconds !== null && createElement('span', {
+    className: 'ddz-countdown ddz-play-area-countdown' + (countdownSeconds <= 3 ? ' urgent' : ''),
+    'aria-live': 'polite',
+  }, `${countdownSeconds}s`),
   cards && cards.length > 0
-    ? createElement('div', { className: 'ddz-play-area-cards ddz-folded-cards', key: cardKey },
+    ? createElement('div', { className: 'ddz-play-area-cards ddz-folded-cards' + specialClass, key: cardKey },
         ...cards.map((card, i) => createElement('div', {
           key: `${card.r}-${card.s}-${i}`,
           className: 'ddz-played-card ddz-card-stack-item',
@@ -246,6 +302,10 @@ function PlayedArea({ seat, cards }: { seat: Seat; cards: Card[] | null }) {
         }, createElement(CardView, { card }))),
       )
     : null,
+  isSpecialPlay && play && createElement('span', {
+    className: 'ddz-special-label ddz-special-label-' + play.kind,
+    key: `special-${cardKey}`,
+  }, KIND_NAMES[play.kind]),
   )
 }
 
@@ -290,6 +350,7 @@ function loadBalance(): number {
   try { return Number(localStorage.getItem('ddz:balance') ?? 100_000) } catch { return 100_000 }
 }
 function saveBalance(v: number): void { localStorage.setItem('ddz:balance', String(v)) }
+function saveProfile(profile: Profile): void { localStorage.setItem('ddz:profile', JSON.stringify(profile)) }
 
 function todayKey(): string {
   const d = new Date()
@@ -304,19 +365,81 @@ function Lobby(props: {
   onClaim: () => void
   claimed: boolean
   onStart: (tableId: string) => void
+  onProfileChange: (profile: Profile) => void
   onClose: () => void
 }) {
-  const { profile, balance, onClaim, claimed, onStart, onClose } = props
+  const { profile, balance, onClaim, claimed, onStart, onProfileChange, onClose } = props
   const rank = rankForBalance(balance)
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const [editingNickname, setEditingNickname] = useState(false)
+  const [nicknameDraft, setNicknameDraft] = useState(profile.nickname)
+
+  const saveNickname = () => {
+    const nickname = limitNickname(nicknameDraft)
+    onProfileChange({ ...profile, nickname })
+    setNicknameDraft(nickname)
+    setEditingNickname(false)
+  }
 
   return createElement('div', { className: 'ddz-body ddz-lobby' },
     createElement('div', { className: 'ddz-lobby-top' },
       createElement('div', { className: 'ddz-lobby-profile-stack' },
         createElement('div', { className: 'ddz-profile ddz-row' },
-          createElement(Avatar, { avatarId: profile.avatarId }),
+          createElement('div', { className: 'ddz-avatar-picker-anchor' },
+            createElement('button', {
+              type: 'button',
+              className: 'ddz-avatar-button',
+              'aria-label': '选择默认头像',
+              'aria-haspopup': 'dialog',
+              'aria-expanded': avatarPickerOpen,
+              onClick: () => { setAvatarPickerOpen((open) => !open); setEditingNickname(false) },
+            }, createElement(Avatar, { avatarId: profile.avatarId })),
+            avatarPickerOpen && createElement('div', { className: 'ddz-avatar-picker', role: 'dialog', 'aria-label': '选择默认头像' },
+              createElement('div', { className: 'ddz-avatar-picker-title' }, '选择默认头像'),
+              createElement('div', { className: 'ddz-avatar-options' },
+                ...[
+                  { id: 'default-01', label: '蓝色' },
+                  { id: 'default-02', label: '黑色' },
+                ].map((avatar) => createElement('button', {
+                  key: avatar.id,
+                  type: 'button',
+                  className: 'ddz-avatar-option' + (profile.avatarId === avatar.id ? ' selected' : ''),
+                  'aria-label': `选择${avatar.label}默认头像`,
+                  'aria-pressed': profile.avatarId === avatar.id,
+                  onClick: () => {
+                    onProfileChange({ ...profile, avatarId: avatar.id })
+                    setAvatarPickerOpen(false)
+                  },
+                },
+                  createElement(Avatar, { avatarId: avatar.id, size: 34 }),
+                  createElement('span', null, avatar.label),
+                )),
+              ),
+            ),
+          ),
           createElement('div', { className: 'ddz-profile-copy' },
-            createElement('div', { className: 'ddz-profile-name' }, profile.nickname),
+            editingNickname
+              ? createElement('div', { className: 'ddz-nickname-editor' },
+                  createElement('input', {
+                    className: 'ddz-nickname-input',
+                    value: nicknameDraft,
+                    maxLength: MAX_NICKNAME_LENGTH,
+                    autoFocus: true,
+                    'aria-label': '编辑昵称',
+                    onChange: (event: { target: { value: string } }) => setNicknameDraft(event.target.value),
+                    onKeyDown: (event: { key: string }) => {
+                      if (event.key === 'Enter') saveNickname()
+                      if (event.key === 'Escape') { setNicknameDraft(profile.nickname); setEditingNickname(false) }
+                    },
+                  }),
+                  createElement('button', { type: 'button', className: 'ddz-icon-btn', 'aria-label': '保存昵称', onClick: saveNickname }, createElement(CheckIcon)),
+                  createElement('button', { type: 'button', className: 'ddz-icon-btn', 'aria-label': '取消编辑昵称', onClick: () => { setNicknameDraft(profile.nickname); setEditingNickname(false) } }, createElement(CloseIcon)),
+                )
+              : createElement('div', { className: 'ddz-profile-name-row' },
+                  createElement('span', { className: 'ddz-profile-name' }, profile.nickname),
+                  createElement('button', { type: 'button', className: 'ddz-icon-btn', 'aria-label': '编辑昵称', onClick: () => { setNicknameDraft(profile.nickname); setEditingNickname(true); setAvatarPickerOpen(false) } }, createElement(EditIcon)),
+                ),
             createElement('div', { className: 'ddz-dim ddz-profile-uid' }, 'UID ' + profile.uid.slice(0, 8)),
           ),
           createElement('span', { className: 'ddz-rank' }, rank.name),
@@ -601,9 +724,12 @@ function Table(props: {
         createElement('div', { className: 'ddz-side-zone left' },
           createElement(SeatPanel, {
             view: botA!, state, isTurn: currentSeat === botA!.seat,
+          }),
+          createElement(PlayedArea, {
+            seat: botA!.seat,
+            cards: playedBySeat[botA!.seat],
             countdownSeconds: currentSeat === botA!.seat && showCountdown ? remainingSeconds : null,
           }),
-          createElement(PlayedArea, { seat: botA!.seat, cards: playedBySeat[botA!.seat] }),
         ),
         createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
           createElement('div', { className: 'ddz-table-turn-label' },
@@ -612,10 +738,13 @@ function Table(props: {
               : ''),
         ),
         createElement('div', { className: 'ddz-side-zone right' },
-          createElement(PlayedArea, { seat: botB!.seat, cards: playedBySeat[botB!.seat] }),
+          createElement(PlayedArea, {
+            seat: botB!.seat,
+            cards: playedBySeat[botB!.seat],
+            countdownSeconds: currentSeat === botB!.seat && showCountdown ? remainingSeconds : null,
+          }),
           createElement(SeatPanel, {
             view: botB!, state, isTurn: currentSeat === botB!.seat,
-            countdownSeconds: currentSeat === botB!.seat && showCountdown ? remainingSeconds : null,
           }),
         ),
       ),
@@ -625,7 +754,6 @@ function Table(props: {
         createElement('div', { className: 'ddz-human-hand-row' },
           createElement(SeatPanel, {
             view: humanView, state, isTurn: currentSeat === HUMAN_SEAT,
-            countdownSeconds: null,
           }),
           createElement('div', { className: 'ddz-row ddz-hand ddz-folded-cards ddz-human-hand', style: { flexWrap: 'nowrap', gap: 0, paddingBottom: 4 } },
             ...sortedHand.map((c, i) =>
@@ -671,10 +799,13 @@ function Table(props: {
   )
 }
 
-function SeatPanel(props: { view: SeatView; state: GameState; isTurn: boolean; countdownSeconds: number | null }) {
-  const { view, state, isTurn, countdownSeconds } = props
+function SeatPanel(props: { view: SeatView; state: GameState; isTurn: boolean }) {
+  const { view, state, isTurn } = props
   const handCount = state.hands[view.seat]!.length
   const role = state.phase !== 'calling' && state.landlord !== null ? roleOf(state, view.seat) : null
+  const roundMultiplier = state.phase === 'calling' ? state.callMultiplier : state.multiplier
+  const statusLabel = view.seat === HUMAN_SEAT ? `倍率 ×${roundMultiplier}` : handCount + ' 张手牌'
+  const statusClass = view.seat === HUMAN_SEAT ? 'ddz-multiplier' : 'ddz-card-count'
   return createElement('div', { className: 'ddz-seat' },
     createElement('div', { className: 'ddz-seat-identity' },
       createElement(PlayerRank, { tokenBalance: view.tokenBalance }),
@@ -684,17 +815,13 @@ function SeatPanel(props: { view: SeatView; state: GameState; isTurn: boolean; c
           createElement('div', { className: 'ddz-seat-name', style: { gap: 6 } },
             createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, view.nickname),
             role && createElement(RoleBadge, { role }),
-            isTurn && countdownSeconds !== null && createElement('span', {
-              className: 'ddz-countdown' + (countdownSeconds <= 3 ? ' urgent' : ''),
-              'aria-live': 'polite',
-            }, `${countdownSeconds}s`),
           ),
           createElement('div', { className: 'ddz-seat-meta' }, `Token ${formatTokenCount(view.tokenBalance)}`),
         ),
       ),
     ),
     createElement('div', { className: 'ddz-seat-cards' },
-      createElement('span', { className: 'ddz-card-count' }, handCount + ' 张手牌'),
+      createElement('span', { className: statusClass }, statusLabel),
     ),
   )
 }
@@ -754,6 +881,12 @@ export function DoudizhuApp() {
     setNotice(`每日签到 +${CONFIG.dailyTokens.toLocaleString()}`)
   }
 
+  const updateProfile = (next: Profile) => {
+    const normalized = { ...next, nickname: limitNickname(next.nickname) }
+    setProfile(normalized)
+    saveProfile(normalized)
+  }
+
   const start = (tid: string) => {
     setTableId(tid)
     setResult(null)
@@ -781,7 +914,7 @@ export function DoudizhuApp() {
         createElement('button', { className: 'ddz-corner-close', 'aria-label': '关闭斗地主', onClick: () => setOpen(false) }, '×'),
         screen === 'lobby' && createElement(Lobby, {
           profile, balance, claimed, onClaim: claim,
-          onStart: start, onClose: () => setOpen(false),
+          onStart: start, onProfileChange: updateProfile, onClose: () => setOpen(false),
         }),
         screen === 'table' && createElement(Table, {
           tableId, base: tableById(tableId)?.base ?? 0, profile, balance,

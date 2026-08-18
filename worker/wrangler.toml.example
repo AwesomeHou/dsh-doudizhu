@@ -17,18 +17,14 @@ account_id = "REPLACE_ME"
 #   { pattern = "api.doudizhu.example.com", zone_id = "REPLACE_ME" }
 # ]
 
-# ---- Durable Objects ----
+# ---- Durable Objects：对局房间 ----
 [[durable_objects.bindings]]
 name = "ROOM"
 class_name = "Room"
 
-[[durable_objects.bindings]]
-name = "PLAYER"
-class_name = "Player"
-
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["Room", "Player"]
+new_sqlite_classes = ["Room"]
 
 # ---- D1 数据库 ----
 [[d1_databases]]
@@ -51,9 +47,9 @@ id = "REPLACE_ME"
 # [triggers]
 # crons = ["0 * * * *"]
 
-# ---- 环境变量（推荐用 wrangler secret 注入，勿写死）----
+# ---- 环境变量（务必用 wrangler secret 注入，勿写死）----
+#   echo "<value>" | wrangler secret put AUTH_SECRET
+#   echo "<value>" | wrangler secret put ANALYTICS_INGEST_KEY
+#   echo "<value>" | wrangler secret put ADMIN_KEY
 # [vars]
-# PUBLIC_DOMAIN = "api.doudizhu.example.com"
-# ANALYTICS_INGEST_KEY = "set-via-secret"
-# AUTH_SECRET = "set-via-secret"
-# ADMIN_KEY = "set-via-secret"
+# PUBLIC_API_ORIGIN = "https://dsh-doudizhu.<account>.workers.dev"

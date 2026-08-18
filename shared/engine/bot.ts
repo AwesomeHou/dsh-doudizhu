@@ -5,6 +5,12 @@
 import { buildPlay, classify, hintPlay, legalPlays } from './valid.ts'
 import type { Card, Play } from './types.ts'
 
+/** 叫地主决策（机器人 / 服务端超时托管共用） */
+export function botCall(hand: Card[], random: () => number = Math.random): boolean {
+  const strong = hand.filter((x) => x.r >= 12).length >= 1 || hand.filter((x) => x.r >= 9).length >= 3
+  return strong || random() < 0.3
+}
+
 /**
  * 机器人出牌决策。
  * @param hand 当前手牌

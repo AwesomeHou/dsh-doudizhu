@@ -29,7 +29,7 @@ assets/
 |---|---|---|
 | 扑克牌正面 | 点数+花色：`C03`(梅花3) `S10`(黑桃10) `HA`(红心A) `D2`(方块2)；王：`JOKER-B`(小王) `JOKER-R`(大王) | `S10.svg`, `JOKER-R.svg` |
 | 牌背 | `back.svg`（普通牌背）、`back-bottom.svg`（底牌牌背可区分色）；设计源=品牌图 | `back.svg` |
-| 头像 | `default-01.svg`(蓝) `default-02.svg`(黑)，派生自品牌图；自定义头像存 R2 用 `user-<uid>-<hash>.webp` | `default-01.svg` |
+| 头像 | `default-01.svg`(蓝) `default-02.svg`(黑)，派生自品牌图 | `default-01.svg` |
 | UI | 小写下划线：`table-bg`, `btn-primary`, `icon-coin`, `logo` | `btn-primary.svg` |
 | 音效 | 小写下划线：`deal`, `play`, `bomb`, `spring`, `settle`, `rankup` | `bomb.mp3` |
 
@@ -47,7 +47,7 @@ assets/
 - **当前**：`default-01`（DeepSeek 蓝）、`default-02`（DeepSeek 黑），直接派生自 `assets/deepseek-blue.svg` / `deepseek-black.svg`。
 - 后续可派生更多变体（反色、裁剪居中、加描边）扩充默认头像库。
 - 约定：头像只做展示用，不做收费皮肤（皮肤 Phase 2 另议）。
-- 自定义头像：用户上传 → 客户端转 WebP（256×256）→ R2 存储，命名 `user-<uid>-<hash>.webp`（见 docs/架构设计.md §3.5）。
+- 自定义头像：**暂缓**（需启用 R2/绑卡），设计见 docs/架构设计.md §3.5。
 
 ### UI `ui/`
 - 牌桌背景、筹码图标（Token 币）、按钮态（normal/hover/disabled）、段位徽章 ×6（小难梁→梁祖）、LOGO、等待/加载动效。

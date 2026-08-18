@@ -28,20 +28,18 @@ const STYLE = `
 .ddz-btn-ghost{background:var(--dz-panel);border:1px solid var(--dz-line);color:var(--dz-text)}
 .ddz-btn-ghost:hover{background:#f7f8fb;color:var(--dz-text)}
 .ddz-btn-red{background:var(--dz-red)}
-.ddz-float{position:fixed;right:18px;bottom:18px;z-index:2147483000;display:flex;align-items:center;gap:8px;background:var(--dz-blue);color:#fff;border:0;border-radius:999px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 7px 14px rgba(54,75,180,.25);transition:background-color .18s ease,transform .18s ease}
+.ddz-float{position:fixed;right:18px;bottom:18px;z-index:2147483000;display:flex;align-items:center;gap:8px;background:var(--dz-blue);color:#fff;border:0;border-radius:10px;padding:9px 14px;font-size:14px;line-height:20px;font-weight:650;cursor:pointer;box-shadow:0 7px 14px rgba(54,75,180,.25);transition:background-color .18s ease,transform .18s ease}
 .ddz-float:hover{background:var(--dz-blue-hover);transform:translateY(-1px)}
+.ddz-float-title{font-weight:650}
+.ddz-float-subtitle{font-size:11px;line-height:16px;opacity:.82}
 .ddz-overlay{position:fixed;inset:0;z-index:2147482999;background:rgba(28,32,42,.26);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
-.ddz-modal{background:var(--dz-panel);border-radius:18px;width:min(1180px,94vw);height:min(760px,92vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 42px rgba(26,32,47,.18)}
-.ddz-head{display:flex;align-items:center;gap:10px;min-height:64px;padding:14px 24px;border-bottom:1px solid var(--dz-line);font-weight:700;background:var(--dz-panel)}
-.ddz-modal-head{justify-content:flex-start}
-.ddz-product-title{font-size:16px;letter-spacing:-.01em}
-.ddz-head-meta{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px}
-.ddz-table-head{margin:-24px -24px 16px;min-height:68px}
-.ddz-table-title{display:flex;align-items:center;gap:12px}
-.ddz-table-title-copy{display:flex;flex-direction:column;gap:2px}
-.ddz-table-head>span:first-of-type{font-size:15px;letter-spacing:-.01em}
-.ddz-table-head>span:last-of-type{font-size:12px;font-variant-numeric:tabular-nums}
-.ddz-table-head>.ddz-btn{flex:none}
+.ddz-modal{position:relative;background:var(--dz-panel);border-radius:18px;width:min(1180px,94vw);height:min(760px,92vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 42px rgba(26,32,47,.18)}
+.ddz-corner-close{position:absolute;top:14px;right:16px;z-index:2;width:34px;height:34px;padding:0;border:1px solid transparent;border-radius:50%;background:transparent;color:var(--dz-dim);font-size:22px;line-height:1;cursor:pointer}
+.ddz-corner-close:hover{background:#f2f4f8;color:var(--dz-text)}
+.ddz-corner-close:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
+.ddz-table-exit{position:absolute;top:16px;left:16px;z-index:2;background:transparent;border:0;color:var(--dz-dim);font:inherit;font-size:13px;cursor:pointer;padding:6px 8px;border-radius:7px}
+.ddz-table-exit:hover{background:#f2f4f8;color:var(--dz-text)}
+.ddz-table-exit:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
 .ddz-body{flex:1;overflow:auto;padding:24px;background:var(--dz-surface)}
 .ddz-row{display:flex;gap:10px;align-items:center}
 .ddz-dim{color:var(--dz-dim)}
@@ -67,13 +65,15 @@ const STYLE = `
 .ddz-tab.on{border-color:var(--dz-blue);box-shadow:0 0 0 1px var(--dz-blue);background:#fbfcff}
 .ddz-toast{position:fixed;left:50%;top:20px;transform:translateX(-50%);background:#fff;color:var(--dz-text);border:1px solid var(--dz-blue);border-radius:10px;padding:10px 18px;font-size:14px;z-index:2147483001;box-shadow:0 8px 12px rgba(26,32,47,.14)}
 .ddz-lobby{padding:30px 36px 36px}
-.ddz-lobby-top{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:46px}
+.ddz-lobby-top{display:flex;justify-content:flex-start;align-items:flex-start;gap:24px;margin-bottom:46px}
+.ddz-lobby-profile-stack{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
 .ddz-profile{gap:12px}
 .ddz-profile-copy{display:flex;flex-direction:column;gap:2px}
 .ddz-profile-name{font-size:15px;font-weight:700}
 .ddz-profile-uid{font-size:12px}
 .ddz-balance{gap:14px}
 .ddz-balance-copy{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.ddz-lobby .ddz-balance-copy{align-items:flex-start}
 .ddz-balance-label{font-size:12px;color:var(--dz-dim)}
 .ddz-balance-value{font-size:20px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .ddz-lobby-intro{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
@@ -84,19 +84,19 @@ const STYLE = `
 .ddz-table-grid .ddz-tab>div:first-child{font-size:15px;margin-bottom:6px}
 .ddz-lobby-actions{display:flex;align-items:center;gap:10px;margin-top:22px}
 .ddz-helper{font-size:12px;margin-top:10px}
+.ddz-table-screen{display:flex;flex-direction:column}
+.ddz-table-reserved-bar{height:44px;flex:0 0 44px;visibility:hidden}
 .ddz-game-table{min-height:0;gap:14px;padding:24px;background:#fbfcfd;border-color:#edf0f4;border-radius:18px}
-.ddz-table-top{display:flex;justify-content:center;min-height:64px}
+.ddz-top-reveal{display:flex;justify-content:center;align-items:center;min-height:88px}
+.ddz-reveal-cards{display:flex;align-items:center;gap:6px;padding:10px 12px;border:1px solid #cbd5ff;border-radius:12px;background:#f7f8ff}
+.ddz-reveal-placeholder{font-size:12px;color:var(--dz-dim);padding:6px 12px;border-radius:999px;background:#eef1f6}
 .ddz-table-middle{display:grid;grid-template-columns:minmax(144px,1fr) minmax(320px,1.6fr) minmax(144px,1fr);align-items:center;gap:18px;flex:1}
 .ddz-table-center{min-height:188px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
 .ddz-table-center .ddz-played{min-height:82px}
 .ddz-table-center .ddz-played .ddz-card{width:48px;height:68px}
-.ddz-table-spacer{min-width:144px}
-.ddz-pot-label{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid var(--dz-line);font-size:12px;color:var(--dz-dim)}
-.ddz-pot-label strong{color:var(--dz-text);font-weight:700}
-.ddz-table-bottom{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:6px}
 .ddz-human-area{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
 .ddz-hand{display:flex;justify-content:center;flex-wrap:wrap;gap:4px;padding:2px 0}
-.ddz-action-dock{display:flex;justify-content:center;gap:10px;min-height:40px}
+.ddz-action-dock{order:-1;display:flex;justify-content:center;gap:10px;min-height:40px}
 .ddz-action-status{font-size:13px;padding:10px 14px;border-radius:999px;background:#fff;border:1px solid var(--dz-line)}
 .ddz-settle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:100%}
 .ddz-result-amount{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em;margin:8px 0}
@@ -107,7 +107,7 @@ const STYLE = `
 .ddz-seat-meta{font-size:11px;color:var(--dz-dim);white-space:nowrap}
 .ddz-seat-cards{font-size:11px;color:var(--dz-dim)}
 .ddz-card-count{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef1f6}
-@media (max-width:720px){.ddz-modal{width:100vw;height:100vh;border-radius:0}.ddz-head{padding:12px 16px}.ddz-body{padding:16px}.ddz-table-head{margin:-16px -16px 12px}.ddz-head-meta{gap:6px}.ddz-head-meta .ddz-dim{display:none}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:100%;justify-content:space-between}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-table-middle{grid-template-columns:1fr;gap:12px}.ddz-table-spacer{display:none}.ddz-table-center{min-height:150px;order:-1}.ddz-table-top{min-height:52px}.ddz-seat{min-width:96px}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-table{padding:12px}.ddz-float{right:12px;bottom:12px}}
+@media (max-width:720px){.ddz-modal{width:100vw;height:100vh;border-radius:0}.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.5fr 1fr;gap:6px}.ddz-table-center{min-height:150px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-table{padding:12px}.ddz-float{right:12px;bottom:12px}}
 @media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-float,.ddz-card{transition:none}.ddz-card:hover,.ddz-float:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}}
 `
 
@@ -189,24 +189,26 @@ function Lobby(props: {
 
   return createElement('div', { className: 'ddz-body ddz-lobby' },
     createElement('div', { className: 'ddz-lobby-top' },
-      createElement('div', { className: 'ddz-profile ddz-row' },
-        createElement(Avatar, { avatarId: profile.avatarId }),
-        createElement('div', { className: 'ddz-profile-copy' },
-          createElement('div', { className: 'ddz-profile-name' }, profile.nickname),
-          createElement('div', { className: 'ddz-dim ddz-profile-uid' }, 'UID ' + profile.uid.slice(0, 8)),
+      createElement('div', { className: 'ddz-lobby-profile-stack' },
+        createElement('div', { className: 'ddz-profile ddz-row' },
+          createElement(Avatar, { avatarId: profile.avatarId }),
+          createElement('div', { className: 'ddz-profile-copy' },
+            createElement('div', { className: 'ddz-profile-name' }, profile.nickname),
+            createElement('div', { className: 'ddz-dim ddz-profile-uid' }, 'UID ' + profile.uid.slice(0, 8)),
+          ),
+          createElement('span', { className: 'ddz-rank' }, rank.name),
         ),
-        createElement('span', { className: 'ddz-rank' }, rank.name),
-      ),
-      createElement('div', { className: 'ddz-balance ddz-row' },
-        createElement('div', { className: 'ddz-balance-copy' },
-          createElement('div', { className: 'ddz-balance-label' }, 'Token 余额'),
-          createElement('div', { className: 'ddz-balance-value' }, balance.toLocaleString()),
+        createElement('div', { className: 'ddz-balance ddz-row' },
+          createElement('div', { className: 'ddz-balance-copy' },
+            createElement('div', { className: 'ddz-balance-label' }, 'Token 余额'),
+            createElement('div', { className: 'ddz-balance-value' }, balance.toLocaleString()),
+          ),
+          createElement('button', {
+            className: 'ddz-btn ddz-balance-btn',
+            disabled: claimed,
+            onClick: onClaim,
+          }, claimed ? '今日已领' : `签到 +${CONFIG.dailyTokens.toLocaleString()}`),
         ),
-        createElement('button', {
-          className: 'ddz-btn ddz-balance-btn',
-          disabled: claimed,
-          onClick: onClaim,
-        }, claimed ? '今日已领' : `签到 +${CONFIG.dailyTokens.toLocaleString()}`),
       ),
     ),
     createElement('div', { className: 'ddz-lobby-intro' },
@@ -373,30 +375,25 @@ function Table(props: {
   const otherSeats = SEATS.filter((s) => s.seat !== HUMAN_SEAT)
   const [botA, botB] = otherSeats
   const currentSeat = state.current
+  const hasConfirmedLandlord = state.phase !== 'calling' && state.landlord !== null
 
   return createElement('div', { className: 'ddz-body ddz-table-screen' },
-    createElement('div', { className: 'ddz-head ddz-table-head' },
-      createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onExit }, '← 退出'),
-      createElement('span', null, tableById(tableId)?.label ?? tableId),
-      createElement('span', { className: 'ddz-dim' }, `底注 ${base.toLocaleString()} · 倍数 ×${state.multiplier} · 炸弹 ${state.bombCount}`),
-      createElement('span', { style: { marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' } }, `余额 ${balance.toLocaleString()}`),
-    ),
+    createElement('button', { className: 'ddz-table-exit', onClick: onExit }, '← 退出牌桌'),
+    createElement('div', { className: 'ddz-table-reserved-bar', 'aria-hidden': true }),
     notice && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
 
     createElement('div', { className: 'ddz-table ddz-game-table' },
-      // 上家（botB）
-      createElement('div', { className: 'ddz-table-top' },
-        createElement(SeatPanel, { view: botB!, state, isTurn: currentSeat === botB!.seat }),
+      // 顶部揭示的地主底牌
+      createElement('div', { className: 'ddz-top-reveal' },
+        hasConfirmedLandlord
+          ? createElement('div', { className: 'ddz-reveal-cards', 'aria-label': '已揭示的地主底牌' },
+              ...state.bottom.map((card, i) => createElement(CardView, { key: i, card })),
+            )
+          : createElement('div', { className: 'ddz-reveal-placeholder' }, '底牌待揭示'),
       ),
       createElement('div', { className: 'ddz-table-middle', style: { justifyContent: 'space-between' } },
         createElement(SeatPanel, { view: botA!, state, isTurn: currentSeat === botA!.seat }),
         createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
-          state.landlord !== null
-            ? createElement('div', { className: 'ddz-pot-label', style: { justifyContent: 'center', gap: 8, marginBottom: 4 } },
-                createElement('span', { className: 'ddz-landlord-badge' }, '地主'),
-                createElement('span', { className: 'ddz-dim', style: { fontSize: 12 } }, SEATS[state.landlord]!.nickname),
-              )
-            : createElement('div', { className: 'ddz-dim', style: { fontSize: 12, marginBottom: 4 } }, '叫地主中…'),
           createElement('div', { className: 'ddz-played' },
             state.lastPlayCards && state.lastPlayCards.length > 0
               ? createElement('div', { className: 'ddz-row' },
@@ -408,14 +405,8 @@ function Table(props: {
             createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } },
               `${SEATS[state.lastActor]!.nickname} 出了 ${state.lastPlay?.kind ?? ''}`),
         ),
-        createElement('div', { className: 'ddz-table-spacer' }),
+        createElement(SeatPanel, { view: botB!, state, isTurn: currentSeat === botB!.seat }),
       ),
-      // 底牌
-      state.landlord !== null &&
-        createElement('div', { className: 'ddz-bottom ddz-table-bottom', style: { justifyContent: 'center' } },
-          createElement('div', { className: 'ddz-dim', style: { fontSize: 12, marginRight: 6 } }, '底牌'),
-          ...state.bottom.map((c, i) => createElement(CardView, { key: i, card: c })),
-        ),
       // 我的手牌与操作
       createElement('div', { className: 'ddz-human-area', style: { textAlign: 'center' } },
         createElement('div', { className: 'ddz-row ddz-hand', style: { justifyContent: 'center', flexWrap: 'wrap', gap: 4, paddingBottom: 4 } },
@@ -454,7 +445,7 @@ function Table(props: {
 function SeatPanel(props: { view: SeatView; state: GameState; isTurn: boolean }) {
   const { view, state, isTurn } = props
   const handCount = state.hands[view.seat]!.length
-  const role = state.landlord !== null ? roleOf(state, view.seat) : null
+  const role = state.phase !== 'calling' && state.landlord !== null ? roleOf(state, view.seat) : null
   return createElement('div', { className: 'ddz-seat' },
     createElement('div', { className: 'ddz-seat-chip' },
       createElement(Avatar, { avatarId: view.avatarId, size: 32 }),
@@ -548,15 +539,11 @@ export function DoudizhuApp() {
     createElement('style', null, STYLE),
     notice && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
     createElement('button', { className: 'ddz-float', onClick: () => setOpen((v) => !v) },
-      '🃏 斗地主', createElement('span', { style: { fontSize: 11, opacity: .8 } }, '等待中，来一把')),
+      createElement('span', { className: 'ddz-float-title' }, '🃏 斗地主'),
+      createElement('span', { className: 'ddz-float-subtitle' }, '等待中，来一把')),
     open && createElement('div', { className: 'ddz-overlay', onClick: (e: { target: unknown; currentTarget: unknown }) => { if (e.target === e.currentTarget) setOpen(false) } },
       createElement('div', { className: 'ddz-modal' },
-        createElement('div', { className: 'ddz-head ddz-modal-head' },
-          createElement('span', { className: 'ddz-product-title', style: { fontSize: 16 } }, '🃏 斗地主'),
-          createElement('span', { className: 'ddz-rank' }, rankForBalance(balance).name),
-          createElement('span', { className: 'ddz-dim', style: { fontSize: 12, marginLeft: 'auto' } }, 'M1 本地演示 · 云端对局即将到来'),
-          createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => setOpen(false) }, '关闭'),
-        ),
+        createElement('button', { className: 'ddz-corner-close', 'aria-label': '关闭斗地主', onClick: () => setOpen(false) }, '×'),
         screen === 'lobby' && createElement(Lobby, {
           profile, balance, claimed, onClaim: claim,
           onStart: start, onClose: () => setOpen(false),

@@ -6,6 +6,7 @@
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { rankForBalance, tableById, CONFIG } from '../../shared/config.ts'
+import { APP_VERSION, PROTOCOL_VERSION } from '../../shared/protocol.ts'
 import { verifyToken, signToken, bearerToken, type AuthPayload } from './auth.ts'
 import { addLedger, getLedger, getPlayer, hasClaimed, hasRescued, insertClaim, insertRescue, updateProfile, upsertPlayer, type PlayerRow } from './db.ts'
 import { joinQueue, leaveQueue, pollStatus, getRoomMeta, clearRoom } from './queue.ts'
@@ -44,7 +45,13 @@ function fail(c: { json: (o: unknown, s?: number) => Response }, status: number,
   return c.json({ error: message }, status)
 }
 
-app.get('/api/health', (c) => c.json({ ok: true, service: 'dsh-doudizhu', ts: Date.now() }))
+app.get('/api/health', (c) => c.json({
+  ok: true,
+  service: 'dsh-doudizhu',
+  version: APP_VERSION,
+  protocol: PROTOCOL_VERSION,
+  ts: Date.now(),
+}))
 
 // ---- 匿名身份 ----
 app.post('/api/auth', async (c) => {
@@ -174,6 +181,11 @@ app.get('/ws/room/:id', async (c) => {
   const token = bearerToken(c.req.header('Authorization')) ?? c.req.query('token')
   const payload = await verifyToken(c.env.AUTH_SECRET, token)
   if (!payload) return fail(c, 401, 'unauthorized')
+  // 在线对战协议版本一致性：客户端须与服务端一致（不一致返回 426）
+  const protoParam = c.req.query('protocol')
+  if (protoParam !== null && Number(protoParam) !== PROTOCOL_VERSION) {
+    return fail(c, 426, `protocol version mismatch: server=${PROTOCOL_VERSION}, client=${protoParam}`)
+  }
   const roomId = c.req.param('id')
   const meta = await getRoomMeta(c.env, roomId)
   if (!meta) return fail(c, 404, 'room not found')

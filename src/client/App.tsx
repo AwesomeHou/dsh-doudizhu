@@ -16,6 +16,7 @@ import { canBeat } from '../../shared/engine/compare.ts'
 import { botCall, botMove } from '../../shared/engine/bot.ts'
 import { KIND_NAMES, RANK_NAMES, SUIT_SYMBOLS, type Card, type Role, type Seat } from '../../shared/engine/types.ts'
 import { deepseekBlueUrl, deepseekBlackUrl } from './brandAssets.ts'
+import { PROTOCOL_VERSION } from '../../shared/protocol.ts'
 import * as api from './api.ts'
 import { tableViewFromEngine, tableViewFromProtocol, type TableView, type SeatView } from './table-view.ts'
 
@@ -969,10 +970,10 @@ function OnlineTable(props: {
     notice,
     remainingSeconds,
     onToggleCard: toggleSelect,
-    onPlay: () => { send({ v: 1, t: 'play', d: { cards: selected } }); setSelected([]) },
-    onPass: () => send({ v: 1, t: 'pass', d: {} }),
+    onPlay: () => { send({ v: PROTOCOL_VERSION, t: 'play', d: { cards: selected } }); setSelected([]) },
+    onPass: () => send({ v: PROTOCOL_VERSION, t: 'pass', d: {} }),
     onHint: doHint,
-    onCall: (call) => send({ v: 1, t: 'call', d: { call } }),
+    onCall: (call) => send({ v: PROTOCOL_VERSION, t: 'call', d: { call } }),
     onExit,
     onDismissNotice: () => setNotice(null),
   })
@@ -1020,12 +1021,17 @@ export function DoudizhuApp() {
   const [rescued, setRescued] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
 
-  // 切换到在线模式：换取 token 并同步服务端资料/余额
+  // 切换到在线模式：先校验协议版本一致，再换取 token 并同步服务端资料/余额
   const enterOnline = async () => {
-    setOnline(true)
     try {
+      const h = await api.health()
+      if (h.protocol !== PROTOCOL_VERSION) {
+        setNotice(`版本不兼容：客户端协议 v${PROTOCOL_VERSION} ≠ 服务器 v${h.protocol}（服务器 ${h.version}）。请更新插件后重试。`)
+        return
+      }
       await api.auth(profile.uid)
       const me = await api.getMe()
+      setOnline(true)
       setBalance(me.player.balance)
       setProfile((p) => ({ ...p, nickname: me.player.nickname, avatarId: me.player.avatarId }))
     } catch (e) {

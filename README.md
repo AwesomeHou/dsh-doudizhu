@@ -74,6 +74,20 @@ dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu
 > - 安装即把插件加入 profile 的 bundle 栈（`cordis.patch.yml`），卸载用 `dsh plugin --profile web remove dsh-doudizhu`。
 > - 若安装报 `git-hosted plugins build on install via their prepare script ... allowBuilds` 的提示：那是 DSH 对 git 安装失败的**通用诊断**。本插件**没有 prepare/install 构建脚本**（`lib/` 预构建随包分发），pnpm 不会对它做构建拦截，因此无需添加 allowBuilds 条目；只要 pnpm 可用、重跑命令即可成功。
 
+## 版本管理（在线对战兼容性）
+
+在线 PVP 要求**所有玩家的客户端协议与服务器一致**，否则对局会不同步/规则打架。实现了一套版本校验：
+
+- **单一来源**：`shared/protocol.ts` 里的 `PROTOCOL_VERSION`（协议版本）与 `APP_VERSION`（应用版本）。
+- **强制校验**：客户端进在线模式前调 `/api/health`，协议不一致直接提示「请更新插件」并阻止；WS 连接带 `protocol`/`app` 参数，服务端再兜底拒绝（426）。
+- **升级流程**（破坏性变更，如改消息格式/规则/结算）：
+  1. `shared/protocol.ts` 中 `PROTOCOL_VERSION` +1，`APP_VERSION` 按 semver 升版；
+  2. 根 `package.json` 的 `version` 同步为 `APP_VERSION`；
+  3. `cd worker && npx wrangler deploy` 部署新协议的服务端；
+  4. `npm run build` 重建 `lib/` 并**连同源码一起提交推送**；
+  5. 发版通知：旧客户端会被「版本不兼容」拦下，提示更新。
+- 非破坏性改动（仅 UI/文案/数值调优）只需升 `APP_VERSION` 和 `package.json`，不动 `PROTOCOL_VERSION`。
+
 ## 本地开发（给维护者）
 
 - Node.js ≥ 20，npm。

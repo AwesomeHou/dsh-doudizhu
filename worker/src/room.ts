@@ -11,6 +11,7 @@ import type { Card, Seat } from '../../shared/engine/types.ts'
 import { settle } from '../../shared/engine/scoring.ts'
 import { CONFIG } from '../../shared/config.ts'
 import type { ClientMsg, GameStateForPlayer, ServerMsg, WireCard } from '../../shared/protocol.ts'
+import { PROTOCOL_VERSION } from '../../shared/protocol.ts'
 import { addLedger, recordMatch } from './db.ts'
 import { clearRoom } from './queue.ts'
 import type { Env, RoomMeta } from './types.ts'
@@ -70,10 +71,45 @@ export class Room {
       this.meta = await getRoomMeta(this.env, roomId)
     }
     if (!this.meta) return new Response('room not found', { status: 404 })
-    return this.open(request, uid, seat, roomId)
+    // 在 fetch 阶段（返回 101 之前）完成所有 await：open() 里 acceptWebSocket 之后
+    // 不能再 await（DO 休眠会打断 101 握手，导致后续连接失败）
+    if (!this.game) {
+      const saved = await this.state.storage.get<GameState>('game')
+      this.game = saved ?? createGame()
+    }
+    // DO 休眠后内存状态（this.seats/this.meta/this.game）会丢失，只有 storage 与
+    // 已接受 WS 存活：从 getWebSockets() 重建座位绑定。
+    this.rebuildSeats()
+    return this.open(request, uid, seat)
   }
 
-  private async open(request: Request, uid: string, seat: Seat, roomId: string): Promise<Response> {
+  /** 从运行时仍存活/已接受的 WebSocket 重建座位绑定（hibernation 唤醒后调用） */
+  private rebuildSeats(): void {
+    this.seats = [null, null, null]
+    const sockets = this.state.getWebSockets()
+    for (const ws of sockets) {
+      const tag = ws.deserializeAttachment() as { seat: number; uid: string } | null
+      if (!tag || tag.seat < 0 || tag.seat > 2) continue
+      const p = this.meta?.players.find((x) => x.seat === tag.seat)
+      this.seats[tag.seat] = {
+        uid: tag.uid,
+        ws,
+        nickname: p?.nickname ?? `座位${tag.seat}`,
+        avatarId: p?.avatarId ?? 'default-01',
+        tokenBalance: p?.tokenBalance ?? 0,
+        connected: true,
+      }
+    }
+  }
+
+  /** 定位 ws 对应的座位（先重建，保证 hibernation 后仍能命中） */
+  private seatOf(ws: WebSocket): Seat {
+    this.rebuildSeats()
+    const seat = this.seats.findIndex((s) => s && s.ws === ws)
+    return seat as Seat
+  }
+
+  private async open(request: Request, uid: string, seat: Seat): Promise<Response> {
     // 校验 uid 是否属于该房间的该座位
     const player = this.meta!.players.find((p) => p.uid === uid && p.seat === seat)
     if (!player) return new Response('not a member of this room seat', { status: 403 })
@@ -81,7 +117,8 @@ export class Room {
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
     // hibernation API：acceptWebSocket 后消息经 webSocketMessage/webSocketClose 回调，
-    // 而不是 addEventListener（混用会收不到消息）
+    // 而不是 addEventListener（混用会收不到消息）；附件用于休眠后重建座位映射
+    server.serializeAttachment({ seat, uid })
     this.state.acceptWebSocket(server)
     this.seats[seat] = {
       uid,
@@ -91,12 +128,6 @@ export class Room {
       tokenBalance: player.tokenBalance,
       connected: true,
     }
-
-    // 开局（或恢复持久化的对局）
-    if (!this.game) {
-      const saved = await this.state.storage.get<GameState>('game')
-      this.game = saved ?? createGame()
-    }
     this.broadcastState()
     this.startTurnTimer()
     return new Response(null, { status: 101, webSocket: client })
@@ -104,21 +135,21 @@ export class Room {
 
   /** hibernation 回调：收到客户端消息 */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const seat = this.seats.findIndex((s) => s && s.ws === ws) as Seat
+    const seat = this.seatOf(ws)
     if (seat < 0) return
     await this.onMessage(seat, typeof message === 'string' ? message : new TextDecoder().decode(message))
   }
 
   /** hibernation 回调：连接关闭 */
   async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
-    const seat = this.seats.findIndex((s) => s && s.ws === ws) as Seat
+    const seat = this.seatOf(ws)
     if (seat < 0) return
     await this.onClose(seat)
   }
 
   /** hibernation 回调：连接错误 */
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-    const seat = this.seats.findIndex((s) => s && s.ws === ws) as Seat
+    const seat = this.seatOf(ws)
     if (seat < 0) return
     await this.onClose(seat)
   }
@@ -132,7 +163,7 @@ export class Room {
       this.send(seat, { v: 1, t: 'error', d: { message: 'bad message' } })
       return
     }
-    if (msg.v !== 1) return
+    if (msg.v !== PROTOCOL_VERSION) return
     // 调试日志：记录最近收到的消息
     try {
       const prev = (await this.state.storage.get<Array<string>>('dlog')) ?? []

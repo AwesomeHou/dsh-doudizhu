@@ -2,6 +2,7 @@
  * src/client/api.ts —— M2 云端 API / WebSocket 客户端
  * 基地址默认线上 Worker；可用 localStorage 'ddz:api' 覆盖（本地联调用 http://127.0.0.1:8787）
  */
+import { APP_VERSION, PROTOCOL_VERSION, type HealthInfo } from '../../shared/protocol.ts'
 
 const DEFAULT_API = 'https://dsh-doudizhu.1546567314.workers.dev'
 
@@ -11,6 +12,11 @@ export function apiBase(): string {
 
 function authToken(): string | null {
   return localStorage.getItem('ddz:token')
+}
+
+/** 服务器健康/版本信息（进入在线模式前做协议兼容性检查） */
+export function health(): Promise<HealthInfo> {
+  return req('/api/health')
 }
 
 async function req<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
@@ -83,9 +89,14 @@ export function leaveQueue(tableId: string): Promise<{ ok: true }> {
   return req('/api/lobby/queue', { method: 'DELETE', body: JSON.stringify({ tableId }) })
 }
 
-/** 连接对局房间 WebSocket（token 走查询参数，浏览器可行） */
+/** 连接对局房间 WebSocket（token/协议/应用版本走查询参数，浏览器可行） */
 export function connectRoom(roomId: string): WebSocket {
   const base = apiBase().replace(/^http/, 'ws')
   const token = authToken()
-  return new WebSocket(`${base}/ws/room/${encodeURIComponent(roomId)}?token=${encodeURIComponent(token ?? '')}`)
+  const params = new URLSearchParams({
+    token: token ?? '',
+    protocol: String(PROTOCOL_VERSION),
+    app: APP_VERSION,
+  })
+  return new WebSocket(`${base}/ws/room/${encodeURIComponent(roomId)}?${params.toString()}`)
 }

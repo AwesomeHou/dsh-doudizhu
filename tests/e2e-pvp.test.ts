@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { botCall, botMove } from '../shared/engine/bot.ts'
 import { classify, type Play } from '../shared/engine/valid.ts'
 import type { Card } from '../shared/engine/types.ts'
+import { PROTOCOL_VERSION } from '../shared/protocol.ts'
 
 const BASE = process.env.DDZ_API ?? 'http://127.0.0.1:8787'
 const WS_BASE = BASE.replace(/^http/, 'ws')
@@ -36,7 +37,7 @@ interface Client {
 
 function openClient(roomId: string, token: string): Promise<{ ws: WebSocket; seat: number; initialState: unknown }> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${WS_BASE}/ws/room/${roomId}?token=${token}`)
+    const ws = new WebSocket(`${WS_BASE}/ws/room/${roomId}?token=${token}&protocol=${PROTOCOL_VERSION}`)
     const timer = setTimeout(() => reject(new Error('ws open timeout')), 10_000)
     ws.addEventListener('open', () => {
       const onFirst = (ev: MessageEvent) => {

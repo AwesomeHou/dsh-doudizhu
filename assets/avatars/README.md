@@ -1,8 +1,18 @@
 # avatars/ — 默认头像
 
-> 用户稍后提供默认头像素材。请按以下规范放入本目录，命名即可被插件引用：
+**默认头像 = DeepSeek 品牌蓝/黑两枚**，由用户提供的品牌素材派生：
 
-- 文件：`default-01.svg` … `default-N.svg`（SVG 优先；也可 PNG 256×256，如 `default-01.png`）。
-- 数量：≥ 6 个。
-- 风格：统一（几何抽象 + 深色底，贴合 DSH 深色技术风），见 [../README.md](../README.md#默认头像-avatars)。
-- 未提供前：UI 用占位头像/emoji（M1 占位策略）。
+| 头像 id | 名称 | 来源 |
+|---|---|---|
+| `default-01` | DeepSeek 蓝 | `assets/deepseek-blue.svg`（蓝 `#4D6BFE`） |
+| `default-02` | DeepSeek 黑 | `assets/deepseek-black.svg`（黑 `#2c2c2c`） |
+
+## 派生要求
+- 格式：方形 `256×256`，SVG 优先（`@2x` 提供 512 用 PNG）。
+- 保持品牌图形完整不变形；可加圆角/描边/深色底衬托（贴合 DSH 深色界面）。
+
+## 扩展
+后续如需更多默认头像，可在本目录派生变体（反色、裁剪居中、加边框），命名 `default-03.svg` … 递增。
+
+## 自定义头像（与默认头像并列）
+用户上传 → 客户端转 WebP（256×256、≤128KB）→ R2 存储 `user-<uid>-<hash>.webp`，不放在本目录（详见 docs/架构设计.md §3.5）。

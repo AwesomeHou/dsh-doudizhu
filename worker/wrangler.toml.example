@@ -41,10 +41,10 @@ database_id = "REPLACE_ME"
 binding = "KVPUBLIC"
 id = "REPLACE_ME"
 
-# ---- R2（Phase 2 自定义头像）----
-# [[r2_buckets]]
-# binding = "AVATARS"
-# bucket_name = "dsh-doudizhu-avatars"
+# ---- R2（自定义头像存储，Phase 1）----
+[[r2_buckets]]
+binding = "AVATARS"
+bucket_name = "dsh-doudizhu-avatars"
 
 # ---- 定时任务（埋点聚合，每小时）----
 # [triggers]

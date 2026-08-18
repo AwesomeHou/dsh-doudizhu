@@ -23,9 +23,9 @@ export const CONFIG = {
   rakeRate: 0.05,
   /** 每手出牌倒计时（ms） */
   turnTimeoutMs: 25_000,
-  /** 桌别 */
+  /** 桌别（门槛=底注×N，保证救济金 100k 可回到最低桌） */
   tables: [
-    { id: 'novice', label: '新手桌', base: 10_000, minBalance: 200_000 },
+    { id: 'novice', label: '新手桌', base: 10_000, minBalance: 100_000 },
     { id: 'advanced', label: '进阶桌', base: 50_000, minBalance: 1_000_000 },
     { id: 'high', label: '高倍桌', base: 200_000, minBalance: 4_000_000 },
   ] as TableConfig[],

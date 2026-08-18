@@ -686,14 +686,17 @@ function Lobby(props: {
             `匹配中… ${matchCount}/3（点击取消）`)
         : createElement('button', {
             className: 'ddz-btn',
-            disabled: balance < (tableById(tableId)?.base ?? 0),
+            // 在线看「桌别余额门槛」，本地看「底注」
+            disabled: balance < (online
+              ? (tableById(tableId)?.minBalance ?? 0)
+              : (tableById(tableId)?.base ?? 0)),
             onClick: () => (online ? onStartOnline(tableId) : onStartLocal(tableId)),
           }, online ? '开始匹配' : '开始本地对局'),
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onClose }, '最小化'),
     ),
-    balance < (tableById(tableId)?.base ?? 0) &&
+    balance < (online ? (tableById(tableId)?.minBalance ?? 0) : (tableById(tableId)?.base ?? 0)) &&
       createElement('div', { className: 'ddz-dim ddz-helper' },
-        '余额不足该桌底注，先签到或换低倍桌'),
+        online ? '余额不足该桌门槛，先签到或领救济金' : '余额不足该桌底注，先签到或换低倍桌'),
   )
 }
 

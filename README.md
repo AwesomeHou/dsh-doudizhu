@@ -48,13 +48,18 @@ dsh-doudizhu/
 
 仓库公开，构建产物 `lib/` 已随仓库提交，任何 DSH 用户可直接从 GitHub 安装。
 
-**前置**：`dsh plugin` 命令依赖 **pnpm 在 PATH 中**（DSH 源码直接 `spawnSync("pnpm", ...)`）。没有 pnpm 会报 `'pnpm' 不是内部或外部命令`。安装 pnpm（二选一）：
-
-```bash
-npm install -g pnpm        # 已装 Node/npm 时
-# 或
-corepack enable pnpm       # Node 自带的 corepack
-```
+**前置（新机器完整清单）**：
+1. **Node.js ≥ 20**（自带 npm）。
+2. **`dsh` 命令在 PATH 中** —— `dsh` 是 npm 包 `@deepseek-ai/dsh` 提供的命令，不是系统自带。装全局即可：
+   ```bash
+   npm install -g @deepseek-ai/dsh          # 或装与主机一致的版本：@deepseek-ai/dsh@0.1.0-rc.7
+   dsh --version                            # 验证；找不到就重开终端让 PATH 生效
+   ```
+   不想装全局也可用 `npx @deepseek-ai/dsh web` / `npx @deepseek-ai/dsh plugin ...` 代替。
+3. **`pnpm` 在 PATH 中** —— `dsh plugin` 依赖 pnpm（DSH 源码直接 `spawnSync("pnpm", ...)`），没有会报 `'pnpm' 不是内部或外部命令`：
+   ```bash
+   npm install -g pnpm        # 或 corepack enable pnpm
+   ```
 
 然后安装插件：
 

@@ -3,7 +3,7 @@ node_modules/
 .pnpm-store/
 
 # ===== 构建产物 =====
-lib/
+# 注意：lib/ 需要提交入库 —— DSH 插件分发机制要求安装包自带构建产物（见 dsh-trajectory-collapse）
 dist/
 *.tsbuildinfo
 *.tsbuildinfo.json

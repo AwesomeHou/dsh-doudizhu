@@ -1,0 +1,4 @@
+# 复制为 .dev.vars 并填入本地开发用 secret（勿入库，.gitignore 已忽略 .dev.vars）
+AUTH_SECRET=replace-with-random
+ANALYTICS_INGEST_KEY=replace-with-random
+ADMIN_KEY=replace-with-random

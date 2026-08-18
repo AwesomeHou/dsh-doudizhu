@@ -569,6 +569,7 @@ function Lobby(props: {
   matching: boolean
   matchCount: number
   rescued: boolean
+  syncing: boolean
   lobbyLatency: number | null
   onRescue: () => void
   onModeChange: (online: boolean) => void
@@ -580,7 +581,7 @@ function Lobby(props: {
 }) {
   const {
     profile, balance, onClaim, claimed, online, matching, matchCount, rescued, onRescue,
-    lobbyLatency,
+    syncing, lobbyLatency,
     onModeChange, onStartLocal, onStartOnline, onCancelMatch, onProfileChange, onClose,
   } = props
   const rank = rankForBalance(balance)
@@ -665,6 +666,7 @@ function Lobby(props: {
           createElement('div', { className: 'ddz-balance-copy' },
             createElement('div', { className: 'ddz-balance-label' }, 'Token 余额' + (online ? '（在线）' : '')),
             createElement('div', { className: 'ddz-balance-value' }, balance.toLocaleString()),
+            online && syncing && createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } }, '同步中…'),
           ),
           createElement('button', {
             className: 'ddz-btn ddz-balance-btn',
@@ -1094,10 +1096,14 @@ export function DoudizhuApp() {
   const [versionError, setVersionError] = useState<{ clientProtocol: number; serverProtocol: number; serverVersion: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const syncRef = useRef<Promise<void> | null>(null)
 
-  // 在线大厅的网络延迟探测（HTTP RTT 到 /api/health）
+  // 在线大厅的网络延迟探测（HTTP RTT 到 /api/health）。
+  // 仅在「在线 + 面板打开 + 处于大厅」时轮询，避免后台/对局中空转请求。
+  // 顺带做协议一致性兜底：服务器协议变了就弹强制更新。
   useEffect(() => {
-    if (!online) {
+    if (!online || !open || screen !== 'lobby') {
       setLobbyLatencyMs(null)
       return
     }
@@ -1106,7 +1112,13 @@ export function DoudizhuApp() {
       const start = Date.now()
       try {
         const h = await api.health()
-        if (!disposed && h.ok) setLobbyLatencyMs(Date.now() - start)
+        if (disposed) return
+        if (h.protocol !== PROTOCOL_VERSION) {
+          setVersionError({ clientProtocol: PROTOCOL_VERSION, serverProtocol: h.protocol, serverVersion: h.version })
+          setOnline(false)
+          return
+        }
+        setLobbyLatencyMs(Date.now() - start)
       } catch {
         if (!disposed) setLobbyLatencyMs(null)
       }
@@ -1117,7 +1129,7 @@ export function DoudizhuApp() {
       disposed = true
       window.clearInterval(timer)
     }
-  }, [online])
+  }, [online, open, screen])
 
   const copyUpdateCmd = () => {
     const cmd = 'dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu'
@@ -1129,22 +1141,30 @@ export function DoudizhuApp() {
     }
   }
 
-  // 切换到在线模式：先校验协议版本一致（不一致强制弹窗），再换取 token 并同步服务端资料/余额
-  const enterOnline = async () => {
-    try {
-      const h = await api.health()
-      if (h.protocol !== PROTOCOL_VERSION) {
-        setVersionError({ clientProtocol: PROTOCOL_VERSION, serverProtocol: h.protocol, serverVersion: h.version })
-        return
+  // 切换到在线模式：立即切换 UI（避免点击等网络导致卡顿），校验/同步放后台。
+  // 协议不一致 → 强制弹窗并回退本地；auth+me 同步余额/资料。
+  const enterOnline = () => {
+    setOnline(true)
+    setSyncing(true)
+    syncRef.current = (async () => {
+      try {
+        const h = await api.health()
+        if (h.protocol !== PROTOCOL_VERSION) {
+          setVersionError({ clientProtocol: PROTOCOL_VERSION, serverProtocol: h.protocol, serverVersion: h.version })
+          setOnline(false)
+          return
+        }
+        await api.auth(profile.uid)
+        const me = await api.getMe()
+        setBalance(me.player.balance)
+        setProfile((p) => ({ ...p, nickname: me.player.nickname, avatarId: me.player.avatarId }))
+      } catch (e) {
+        setNotice(e instanceof Error ? e.message : '在线连接失败')
+        setOnline(false)
+      } finally {
+        setSyncing(false)
       }
-      await api.auth(profile.uid)
-      const me = await api.getMe()
-      setOnline(true)
-      setBalance(me.player.balance)
-      setProfile((p) => ({ ...p, nickname: me.player.nickname, avatarId: me.player.avatarId }))
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : '在线连接失败')
-    }
+    })()
   }
 
   const leaveOnline = () => {
@@ -1207,6 +1227,12 @@ export function DoudizhuApp() {
   }
 
   const startOnline = async (tid: string) => {
+    // 先等「切换在线」的后台同步完成（版本校验 + token + 余额），确保状态就绪
+    if (syncRef.current) await syncRef.current
+    if (!online) {
+      setNotice('在线状态未就绪，请重试')
+      return
+    }
     setTableId(tid)
     setResult(null)
     setMatching(true)
@@ -1308,7 +1334,7 @@ export function DoudizhuApp() {
       createElement('div', { className: 'ddz-modal' },
         createElement('button', { className: 'ddz-corner-close', 'aria-label': '关闭斗地主', onClick: () => setOpen(false) }, '×'),
         screen === 'lobby' && createElement(Lobby, {
-          profile, balance, claimed, online, matching, matchCount, rescued, lobbyLatency: lobbyLatencyMs,
+          profile, balance, claimed, online, matching, matchCount, rescued, syncing, lobbyLatency: lobbyLatencyMs,
           onClaim: claim,
           onRescue: rescue,
           onModeChange: (nextOnline) => { if (nextOnline === online) return; if (nextOnline) enterOnline(); else leaveOnline() },

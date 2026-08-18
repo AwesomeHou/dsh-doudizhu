@@ -16,7 +16,7 @@ import { canBeat } from '../../shared/engine/compare.ts'
 import { botCall, botMove } from '../../shared/engine/bot.ts'
 import { KIND_NAMES, RANK_NAMES, SUIT_SYMBOLS, type Card, type Role, type Seat } from '../../shared/engine/types.ts'
 import { deepseekBlueUrl, deepseekBlackUrl } from './brandAssets.ts'
-import { PROTOCOL_VERSION } from '../../shared/protocol.ts'
+import { PROTOCOL_VERSION, APP_VERSION } from '../../shared/protocol.ts'
 import * as api from './api.ts'
 import { tableViewFromEngine, tableViewFromProtocol, type TableView, type SeatView } from './table-view.ts'
 
@@ -189,6 +189,13 @@ const STYLE = `
 .ddz-latency.mid .ddz-latency-dot{background:#e6a23c}
 .ddz-latency.bad .ddz-latency-dot{background:var(--dz-red)}
 .ddz-latency b{font-variant-numeric:tabular-nums;color:var(--dz-text);font-weight:700}
+.ddz-latency-sep{margin:0 2px;opacity:.5}
+.ddz-lobby-version{flex:0 0 auto;text-align:center;padding:8px 0 2px;font-size:11px;color:var(--dz-dim)}
+.ddz-dialog{position:fixed;inset:0;z-index:2147483000;background:rgba(28,32,42,.5);display:flex;align-items:center;justify-content:center;animation:ddz-overlay-in .2s ease-out both}
+.ddz-dialog-card{width:min(430px,92vw);background:var(--dz-panel);border:1px solid var(--dz-line);border-radius:16px;padding:22px;box-shadow:0 18px 42px rgba(26,32,47,.25)}
+.ddz-dialog-title{font-size:17px;font-weight:800;margin:0 0 10px}
+.ddz-dialog-body{font-size:13px;line-height:1.7;color:var(--dz-dim);margin-bottom:16px}
+.ddz-dialog-code{display:block;background:#f2f4f8;border:1px solid var(--dz-line);border-radius:8px;padding:8px 10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dz-text);margin:8px 0 2px;word-break:break-all}
 @keyframes ddz-overlay-in{from{opacity:0}to{opacity:1}}
 @keyframes ddz-modal-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes ddz-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
@@ -582,7 +589,8 @@ function Lobby(props: {
     setEditingNickname(false)
   }
 
-  return createElement('div', { className: 'ddz-body ddz-lobby' },
+  return createElement(Fragment, null,
+    createElement('div', { className: 'ddz-body ddz-lobby' },
     createElement('div', { className: 'ddz-lobby-top' },
       createElement('div', { className: 'ddz-lobby-profile-stack' },
         createElement('div', { className: 'ddz-profile ddz-row' },
@@ -704,6 +712,8 @@ function Lobby(props: {
     balance < (online ? (tableById(tableId)?.minBalance ?? 0) : (tableById(tableId)?.base ?? 0)) &&
       createElement('div', { className: 'ddz-dim ddz-helper' },
         online ? '余额不足该桌门槛，先签到或领救济金' : '余额不足该桌底注，先签到或换低倍桌'),
+    ),
+    createElement('div', { className: 'ddz-lobby-version' }, `斗地主 v${APP_VERSION}`),
   )
 }
 
@@ -992,6 +1002,8 @@ function OnlineTable(props: {
     latencyMs === null
       ? createElement('span', null, '网络延迟 —')
       : createElement('span', null, '网络延迟 ', createElement('b', null, `${latencyMs}ms`)),
+    createElement('span', { className: 'ddz-latency-sep' }, '·'),
+    createElement('span', null, '版本 ', createElement('b', null, `v${APP_VERSION}`)),
   )
 
   if (!view) {
@@ -1062,14 +1074,26 @@ export function DoudizhuApp() {
   const [matchCount, setMatchCount] = useState(0)
   const [roomId, setRoomId] = useState<string | null>(null)
   const [rescued, setRescued] = useState(false)
+  const [versionError, setVersionError] = useState<{ clientProtocol: number; serverProtocol: number; serverVersion: string } | null>(null)
+  const [copied, setCopied] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
 
-  // 切换到在线模式：先校验协议版本一致，再换取 token 并同步服务端资料/余额
+  const copyUpdateCmd = () => {
+    const cmd = 'dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu'
+    const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1600) }
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(cmd).then(done).catch(done)
+    } else {
+      done()
+    }
+  }
+
+  // 切换到在线模式：先校验协议版本一致（不一致强制弹窗），再换取 token 并同步服务端资料/余额
   const enterOnline = async () => {
     try {
       const h = await api.health()
       if (h.protocol !== PROTOCOL_VERSION) {
-        setNotice(`版本不兼容：客户端协议 v${PROTOCOL_VERSION} ≠ 服务器 v${h.protocol}（服务器 ${h.version}）。请更新插件后重试。`)
+        setVersionError({ clientProtocol: PROTOCOL_VERSION, serverProtocol: h.protocol, serverVersion: h.version })
         return
       }
       await api.auth(profile.uid)
@@ -1220,6 +1244,22 @@ export function DoudizhuApp() {
   return createElement('div', { className: 'ddz-root' },
     createElement('style', null, STYLE),
     notice && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
+    versionError && createElement('div', { className: 'ddz-dialog' },
+      createElement('div', { className: 'ddz-dialog-card', role: 'alertdialog', 'aria-label': '版本不兼容', 'aria-modal': 'true' },
+        createElement('h3', { className: 'ddz-dialog-title' }, '版本不兼容，需要更新'),
+        createElement('div', { className: 'ddz-dialog-body' },
+          '在线对战要求客户端与服务器协议一致。当前客户端协议 v' + versionError.clientProtocol
+          + ' ≠ 服务器 v' + versionError.serverProtocol
+          + '（服务器版本 ' + versionError.serverVersion + '）。请更新插件后重试。',
+          createElement('code', { className: 'ddz-dialog-code' }, 'dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu'),
+        ),
+        createElement('div', { className: 'ddz-row', style: { justifyContent: 'flex-end', gap: 10 } },
+          createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: copyUpdateCmd },
+            copied ? '已复制 ✓' : '复制更新命令'),
+          createElement('button', { className: 'ddz-btn', onClick: () => setVersionError(null) }, '我知道了'),
+        ),
+      ),
+    ),
     createElement('button', { className: 'ddz-float', onClick: () => setOpen((v) => !v) },
       createElement('span', { className: 'ddz-float-title' }, '🃏 斗地主'),
       createElement('span', { className: 'ddz-float-subtitle' }, online ? '在线对战' : '等待中，来一把')),

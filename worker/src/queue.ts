@@ -1,87 +1,148 @@
 /**
- * worker/src/queue.ts —— 匹配（KV 队列按桌别凑 3 人开局）
- * 说明：KV 的读改写非原子，小规模 beta 够用；并发高峰可后续换 Durable Object 队列。
- * 卫生：队列/房间条目都带 TTL，加入前清理过期条目，避免「幽灵玩家」占座。
+ * worker/src/queue.ts —— 匹配队列（Durable Object，原子化，避免并发加入互相覆盖）
+ *
+ * 每个桌别一个 Queue DO 实例（idFromName('queue:<tableId>')），单实例串行处理请求，
+ * 读改写天然原子：三人同时点匹配不会丢人。
+ *
+ * 房间元数据仍写 KV（供 Room DO / worker 读取），带 TTL 自动清理。
  */
 import { tableById } from '../../shared/config.ts'
 import type { Env, QueueEntry, RoomMeta } from './types.ts'
 
-const queueKey = (tableId: string) => `queue:${tableId}`
 const roomKey = (roomId: string) => `room:${roomId}`
 const uidRoomKey = (uid: string) => `roomuid:${uid}`
-
-/** 队列条目 5 分钟过期（玩家中途离开后自动清理） */
-const QUEUE_TTL_SECONDS = 300
-/** 读取时认为过期的队列条目时长 */
-const QUEUE_STALE_MS = 3 * 60_000
 /** 房间元数据 2 小时过期（避免对局未结算就永远残留） */
 const ROOM_TTL_SECONDS = 7200
-
-async function readQueue(env: Env, tableId: string): Promise<QueueEntry[]> {
-  const raw = await env.KVPUBLIC.get(queueKey(tableId))
-  if (!raw) return []
-  try {
-    const now = Date.now()
-    return (JSON.parse(raw) as QueueEntry[]).filter((e) => now - e.joinedAt <= QUEUE_STALE_MS)
-  } catch {
-    return []
-  }
-}
-
-async function writeQueue(env: Env, tableId: string, queue: QueueEntry[]): Promise<void> {
-  await env.KVPUBLIC.put(queueKey(tableId), JSON.stringify(queue), { expirationTtl: QUEUE_TTL_SECONDS })
-}
+/** 队列条目视为过期的时长（进入后 3 分钟未凑满则作废） */
+const QUEUE_STALE_MS = 3 * 60_000
 
 export type JoinResult =
   | { status: 'waiting'; count: number }
   | { status: 'matched'; roomId: string }
 
-/** 加入匹配队列；满 3 人时创建房间并返回 roomId（创建者即第三人） */
-export async function joinQueue(env: Env, tableId: string, entry: QueueEntry): Promise<JoinResult> {
-  let queue = await readQueue(env, tableId)
-  queue = queue.filter((e) => e.uid !== entry.uid)
-  queue.push(entry)
-  if (queue.length < 3) {
-    await writeQueue(env, tableId, queue)
-    return { status: 'waiting', count: queue.length }
+/** 匹配队列 Durable Object（每个桌别一个实例） */
+export class Queue {
+  private state: DurableObjectState
+  private env: Env
+
+  constructor(state: DurableObjectState, env: Env) {
+    this.state = state
+    this.env = env
   }
-  const trio = queue.slice(0, 3)
-  const rest = queue.slice(3)
-  const base = tableById(tableId)?.base ?? 10_000
-  const roomId = crypto.randomUUID()
-  const roomMeta: RoomMeta = {
-    id: roomId,
-    tableId,
-    base,
-    createdAt: Date.now(),
-    players: trio.map((e, i) => ({
-      uid: e.uid,
-      seat: i as RoomMeta['players'][number]['seat'],
-      nickname: e.nickname,
-      avatarId: e.avatarId,
-      tokenBalance: e.tokenBalance,
-    })),
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+    const action = url.searchParams.get('action')
+    const body = await request.json().catch(() => ({})) as { uid?: string; entry?: QueueEntry }
+    try {
+      switch (action) {
+        case 'join': {
+          const entry = body.entry as QueueEntry
+          if (!entry?.uid) return Response.json({ error: 'missing entry' }, { status: 400 })
+          const result = await this.join(entry)
+          return Response.json(result)
+        }
+        case 'leave': {
+          if (body.uid) await this.leave(body.uid)
+          return Response.json({ ok: true })
+        }
+        case 'status': {
+          const queue = await this.load()
+          const count = body.uid ? queue.some((e) => e.uid === body.uid) : false
+          return Response.json({ status: 'waiting', count: count ? queue.length : 0 })
+        }
+        default:
+          return Response.json({ error: 'unknown action' }, { status: 400 })
+      }
+    } catch (err) {
+      return Response.json({ error: err instanceof Error ? err.message : 'queue error' }, { status: 500 })
+    }
   }
-  await env.KVPUBLIC.put(roomKey(roomId), JSON.stringify(roomMeta), { expirationTtl: ROOM_TTL_SECONDS })
-  for (const p of roomMeta.players) {
-    await env.KVPUBLIC.put(uidRoomKey(p.uid), roomId, { expirationTtl: ROOM_TTL_SECONDS })
+
+  /** 桌别 id（来自 DO 实例名 queue:<tableId>） */
+  private get tableId(): string {
+    return this.state.id.name?.slice('queue:'.length) ?? ''
   }
-  await writeQueue(env, tableId, rest)
-  return { status: 'matched', roomId }
+
+  private async load(): Promise<QueueEntry[]> {
+    const raw = await this.state.storage.get<QueueEntry[]>('queue')
+    if (!raw) return []
+    const now = Date.now()
+    return raw.filter((e) => now - e.joinedAt <= QUEUE_STALE_MS)
+  }
+
+  private async save(queue: QueueEntry[]): Promise<void> {
+    await this.state.storage.put('queue', queue)
+  }
+
+  private async join(entry: QueueEntry): Promise<JoinResult> {
+    let queue = await this.load()
+    queue = queue.filter((e) => e.uid !== entry.uid)
+    queue.push(entry)
+    if (queue.length < 3) {
+      await this.save(queue)
+      return { status: 'waiting', count: queue.length }
+    }
+    const trio = queue.slice(0, 3)
+    const rest = queue.slice(3)
+    const tableId = this.tableId
+    const roomId = crypto.randomUUID()
+    const roomMeta: RoomMeta = {
+      id: roomId,
+      tableId,
+      base: tableById(tableId)?.base ?? 10_000,
+      createdAt: Date.now(),
+      players: trio.map((e, i) => ({
+        uid: e.uid,
+        seat: i as RoomMeta['players'][number]['seat'],
+        nickname: e.nickname,
+        avatarId: e.avatarId,
+        tokenBalance: e.tokenBalance,
+      })),
+    }
+    await this.env.KVPUBLIC.put(roomKey(roomId), JSON.stringify(roomMeta), { expirationTtl: ROOM_TTL_SECONDS })
+    for (const p of roomMeta.players) {
+      await this.env.KVPUBLIC.put(uidRoomKey(p.uid), roomId, { expirationTtl: ROOM_TTL_SECONDS })
+    }
+    await this.save(rest)
+    return { status: 'matched', roomId }
+  }
+
+  private async leave(uid: string): Promise<void> {
+    const queue = (await this.load()).filter((e) => e.uid !== uid)
+    await this.save(queue)
+  }
 }
 
-export async function leaveQueue(env: Env, tableId: string, uid: string): Promise<void> {
-  const queue = (await readQueue(env, tableId)).filter((e) => e.uid !== uid)
-  await writeQueue(env, tableId, queue)
+// ---- Worker 侧调用封装 ----
+
+function stub(env: Env, tableId: string) {
+  return env.QUEUE.get(env.QUEUE.idFromName('queue:' + tableId))
+}
+
+async function call<T>(stub: DurableObjectStub, action: string, payload: unknown): Promise<T> {
+  const res = await stub.fetch(new Request(`http://queue/?action=${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+  return res.json() as T
+}
+
+/** 加入匹配队列；满 3 人时创建房间并返回 roomId */
+export function joinQueue(env: Env, tableId: string, entry: QueueEntry): Promise<JoinResult> {
+  return call(stub(env, tableId), 'join', { entry })
+}
+
+export function leaveQueue(env: Env, tableId: string, uid: string): Promise<{ ok: true }> {
+  return call(stub(env, tableId), 'leave', { uid })
 }
 
 /** 轮询：是否已被匹配进房间 */
 export async function pollStatus(env: Env, tableId: string, uid: string): Promise<JoinResult> {
   const roomId = await env.KVPUBLIC.get(uidRoomKey(uid))
   if (roomId) return { status: 'matched', roomId }
-  const queue = await readQueue(env, tableId)
-  const count = queue.some((e) => e.uid === uid) ? queue.length : 0
-  return { status: 'waiting', count }
+  return call(stub(env, tableId), 'status', { uid })
 }
 
 export async function getRoomMeta(env: Env, roomId: string): Promise<RoomMeta | null> {

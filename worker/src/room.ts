@@ -183,6 +183,10 @@ export class Room {
         case 'pass':
           this.game = applyAction(this.game, { type: 'pass', seat })
           break
+        case 'ping':
+          // 延迟探测：原样回 ts，客户端算 RTT
+          this.send(seat, { v: PROTOCOL_VERSION, t: 'pong', d: { ts: (msg.d as { ts: number }).ts } })
+          return
         default:
           return
       }

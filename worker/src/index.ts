@@ -15,6 +15,7 @@ import type { Env } from './types.ts'
 
 /** Durable Object 需从入口导出 */
 export { Room } from './room.ts'
+export { Queue } from './queue.ts'
 
 const app = new Hono<{ Bindings: Env }>()
 

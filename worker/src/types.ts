@@ -7,6 +7,7 @@ export interface Env {
   DB: D1Database
   KVPUBLIC: KVNamespace
   ROOM: DurableObjectNamespace
+  QUEUE: DurableObjectNamespace
   AUTH_SECRET: string
   ANALYTICS_INGEST_KEY: string
   ADMIN_KEY: string

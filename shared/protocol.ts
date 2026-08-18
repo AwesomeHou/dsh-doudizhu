@@ -32,6 +32,7 @@ export type ClientMsg =
   | { v: typeof PROTOCOL_VERSION; t: 'call'; d: { call: boolean } }
   | { v: typeof PROTOCOL_VERSION; t: 'play'; d: { cards: WireCard[] } }
   | { v: typeof PROTOCOL_VERSION; t: 'pass'; d: Record<string, never> }
+  | { v: typeof PROTOCOL_VERSION; t: 'ping'; d: { ts: number } }
 
 /** 服务端 → 客户端：给某个玩家的个性化对局状态 */
 export interface GameStateForPlayer {
@@ -81,6 +82,7 @@ export type ServerMsg =
   | { v: typeof PROTOCOL_VERSION; t: 'settle'; d: SettleMsg }
   | { v: typeof PROTOCOL_VERSION; t: 'error'; d: { message: string } }
   | { v: typeof PROTOCOL_VERSION; t: 'info'; d: { message: string } }
+  | { v: typeof PROTOCOL_VERSION; t: 'pong'; d: { ts: number } }
 
 /** 心跳（服务端主动发，客户端不回也可） */
 export const HEARTBEAT_INTERVAL_MS = 25_000

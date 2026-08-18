@@ -17,14 +17,22 @@ account_id = "REPLACE_ME"
 #   { pattern = "api.doudizhu.example.com", zone_id = "REPLACE_ME" }
 # ]
 
-# ---- Durable Objects：对局房间 ----
+# ---- Durable Objects：对局房间 + 匹配队列 ----
 [[durable_objects.bindings]]
 name = "ROOM"
 class_name = "Room"
 
+[[durable_objects.bindings]]
+name = "QUEUE"
+class_name = "Queue"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Queue"]
 
 # ---- D1 数据库 ----
 [[d1_databases]]

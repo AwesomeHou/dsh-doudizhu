@@ -6,7 +6,7 @@
  * - 经济：本地 localStorage 模拟；在线走 Cloudflare Worker（服务端权威记账）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
 import { CONFIG, rankForBalance, tableById } from '../../shared/config.ts'
 import { cardName, sortHand } from '../../shared/engine/deck.ts'
 import { applyAction, createGame, type GameState } from '../../shared/engine/game.ts'
@@ -183,6 +183,12 @@ const STYLE = `
 .ddz-seat-cards{font-size:11px;color:var(--dz-dim)}
 .ddz-card-count{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef1f6}
 .ddz-multiplier{display:inline-block;padding:3px 8px;border-radius:999px;background:#fff7e6;color:var(--dz-gold);font-weight:750;font-variant-numeric:tabular-nums}
+.ddz-latency{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 12px;border-top:1px solid var(--dz-line);background:var(--dz-surface);color:var(--dz-dim);font-size:12px}
+.ddz-latency .ddz-latency-dot{width:8px;height:8px;border-radius:50%;background:#b7becb;display:inline-block}
+.ddz-latency.good .ddz-latency-dot{background:#2f9e62}
+.ddz-latency.mid .ddz-latency-dot{background:#e6a23c}
+.ddz-latency.bad .ddz-latency-dot{background:var(--dz-red)}
+.ddz-latency b{font-variant-numeric:tabular-nums;color:var(--dz-text);font-weight:700}
 @keyframes ddz-overlay-in{from{opacity:0}to{opacity:1}}
 @keyframes ddz-modal-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes ddz-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
@@ -884,8 +890,10 @@ function OnlineTable(props: {
   const [selected, setSelected] = useState<Card[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [clock, setClock] = useState(() => Date.now())
+  const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef(0)
+  const pingRef = useRef<number | null>(null)
 
   const send = useCallback((msg: unknown) => {
     const ws = wsRef.current
@@ -908,6 +916,12 @@ function OnlineTable(props: {
           setClock(Date.now())
         } else if (msg.t === 'settle') {
           onSettled(msg.d.myDelta, msg.d.balance_after, msg.d.winner, msg.d.spring, msg.d.multiplier, msg.d.rake)
+        } else if (msg.t === 'pong') {
+          const ts = msg.d.ts as number
+          if (ts !== undefined && pingRef.current !== null) {
+            setLatencyMs(Math.max(0, Date.now() - ts))
+          }
+          pingRef.current = null
         } else if (msg.t === 'error') {
           setNotice(msg.d.message)
         }
@@ -936,6 +950,21 @@ function OnlineTable(props: {
     return () => window.clearInterval(timer)
   }, [])
 
+  // 网络延迟探测：每 3s 发一次 ping，服务端回 pong 后算 RTT
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        setLatencyMs(null)
+        return
+      }
+      const ts = Date.now()
+      pingRef.current = ts
+      send({ v: PROTOCOL_VERSION, t: 'ping', d: { ts } })
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [send])
+
   const remainingSeconds = view && !view.finished
     ? Math.max(0, Math.ceil((view.turnStartedAt + view.turnTimeoutMs - clock) / 1000))
     : null
@@ -957,26 +986,40 @@ function OnlineTable(props: {
     setSelected(h)
   }
 
+  const latencyClass = latencyMs === null ? '' : latencyMs < 100 ? ' good' : latencyMs < 250 ? ' mid' : ' bad'
+  const latencyFooter = createElement('div', { className: 'ddz-latency' + latencyClass, role: 'status', 'aria-live': 'polite' },
+    createElement('span', { className: 'ddz-latency-dot' }),
+    latencyMs === null
+      ? createElement('span', null, '网络延迟 —')
+      : createElement('span', null, '网络延迟 ', createElement('b', null, `${latencyMs}ms`)),
+  )
+
   if (!view) {
-    return createElement('div', { className: 'ddz-body ddz-table-screen' },
-      createElement('div', { className: 'ddz-table ddz-game-table', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dz-dim)' } },
-        '对局连接中…'),
+    return createElement(Fragment, null,
+      createElement('div', { className: 'ddz-body ddz-table-screen' },
+        createElement('div', { className: 'ddz-table ddz-game-table', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dz-dim)' } },
+          '对局连接中…'),
+      ),
+      latencyFooter,
     )
   }
 
-  return createElement(GameTableShell, {
-    view,
-    selected,
-    notice,
-    remainingSeconds,
-    onToggleCard: toggleSelect,
-    onPlay: () => { send({ v: PROTOCOL_VERSION, t: 'play', d: { cards: selected } }); setSelected([]) },
-    onPass: () => send({ v: PROTOCOL_VERSION, t: 'pass', d: {} }),
-    onHint: doHint,
-    onCall: (call) => send({ v: PROTOCOL_VERSION, t: 'call', d: { call } }),
-    onExit,
-    onDismissNotice: () => setNotice(null),
-  })
+  return createElement(Fragment, null,
+    createElement(GameTableShell, {
+      view,
+      selected,
+      notice,
+      remainingSeconds,
+      onToggleCard: toggleSelect,
+      onPlay: () => { send({ v: PROTOCOL_VERSION, t: 'play', d: { cards: selected } }); setSelected([]) },
+      onPass: () => send({ v: PROTOCOL_VERSION, t: 'pass', d: {} }),
+      onHint: doHint,
+      onCall: (call) => send({ v: PROTOCOL_VERSION, t: 'call', d: { call } }),
+      onExit,
+      onDismissNotice: () => setNotice(null),
+    }),
+    latencyFooter,
+  )
 }
 
 /* ============================== 结算 ============================== */

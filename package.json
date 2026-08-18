@@ -1,6 +1,6 @@
 {
   "name": "dsh-doudizhu",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DSH web plugin: 斗地主 — play Dou Dizhu in the DeepSeek Harness GUI while waiting for the agent to reply.",
   "type": "module",
   "private": true,

@@ -304,7 +304,8 @@ export class Room {
   private stateFor(seat: Seat): GameStateForPlayer {
     const game = this.game!
     const meta = this.meta!
-    const landlord = game.landlord
+    // 叫地主阶段的 landlord 只是当前最高叫分者，只有进入出牌阶段才正式确定。
+    const landlord = game.phase === 'calling' ? null : game.landlord
     return {
       phase: game.phase,
       seat,

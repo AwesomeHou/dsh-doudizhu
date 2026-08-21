@@ -44,7 +44,8 @@ const NO_SEATS: SeatView[] = []
 
 /** 本地引擎状态 → 视图（人类恒为 0 号座位） */
 export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<{ nickname: string; avatarId: string; tokenBalance: number }>): TableView {
-  const landlord = s.landlord
+  // 叫地主阶段的 landlord 只是当前最高叫分者，只有进入出牌阶段才正式确定。
+  const landlord = s.phase === 'calling' ? null : s.landlord
   const seats: SeatView[] = ([0, 1, 2] as Seat[]).map((seat) => {
     const meta = seatMeta[seat] ?? { nickname: `座位${seat}`, avatarId: 'default-01', tokenBalance: 0 }
     return {

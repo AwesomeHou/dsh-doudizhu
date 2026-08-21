@@ -71,7 +71,7 @@ dsh plugin --profile web add github:AwesomeHou/dsh-doudizhu
 dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu
 ```
 
-装完后**重启 `dsh web`**，刷新界面即可在右下角看到「🃏 斗地主」入口。
+装完后**重启 `dsh web`**，刷新界面即可在侧栏「新会话」与「工作区」之间看到「🃏 斗地主」入口；点击后打开独立斗地主工作区，入口会显示灰色高光。
 
 > 说明：
 > - 插件的在线对战依赖部署在 Cloudflare 的后端（客户端内置默认 API 地址），无需使用者自建后端。

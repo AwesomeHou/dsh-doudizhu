@@ -1,11 +1,11 @@
 /**
  * dsh-doudizhu 客户端主界面（M1 本地 + M2 在线）
- * - 浮动入口按钮 + 全屏对局面板（body portal）
+ * - 侧边栏入口 + 独立斗地主工作区 + 可调整画中画小窗
  * - 大厅：昵称/头像/段位/余额、每日签到、桌别选择、本地/在线模式切换
  * - 牌桌（本地机器人 or 线上真人 PVP）：叫地主/抢地主 → 出牌/过/提示 → 结算
  * - 经济：本地 localStorage 模拟；在线走 Cloudflare Worker（服务端权威记账）
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createElement, Fragment } from 'react'
 import { CONFIG, rankForBalance, tableById } from '../../shared/config.ts'
 import { cardName, sortHand } from '../../shared/engine/deck.ts'
@@ -23,21 +23,54 @@ import { tableViewFromEngine, tableViewFromProtocol, type TableView, type SeatVi
 /* ============================== 样式 ============================== */
 
 const STYLE = `
-.ddz-root{--dz-blue:#4d6bfe;--dz-blue-hover:#405de0;--dz-bg:#f5f7fa;--dz-panel:#fff;--dz-surface:#fff;--dz-table:#f7f8fb;--dz-line:#e4e7ed;--dz-text:#20242c;--dz-dim:#6f7684;--dz-red:#c53f4d;--dz-red-soft:#fff0f1;--dz-gold:#966813;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--dz-text);color-scheme:light;}
+ .ddz-root{--dz-blue:#4d6bfe;--dz-blue-hover:#405de0;--dz-bg:#f5f7fa;--dz-panel:#fff;--dz-surface:#fff;--dz-table:#f7f8fb;--dz-line:#e4e7ed;--dz-text:#20242c;--dz-dim:#6f7684;--dz-red:#c53f4d;--dz-red-soft:#fff0f1;--dz-gold:#966813;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--dz-text);color-scheme:light;}
 .ddz-btn{background:var(--dz-blue);border:0;border-radius:9px;color:#fff;font-size:14px;line-height:20px;padding:9px 18px;cursor:pointer;font-weight:650;transition:background-color .18s ease,transform .18s ease,box-shadow .18s ease}
 .ddz-btn:hover{background:var(--dz-blue-hover);transform:translateY(-1px)}
 .ddz-btn:active{transform:translateY(1px)}
-.ddz-btn:focus-visible,.ddz-tab:focus-visible,.ddz-card:focus-visible,.ddz-float:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
+ .ddz-btn:focus-visible,.ddz-tab:focus-visible,.ddz-card:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
 .ddz-btn:disabled{background:#b7becb;cursor:not-allowed}
 .ddz-btn-ghost{background:var(--dz-panel);border:1px solid var(--dz-line);color:var(--dz-text)}
 .ddz-btn-ghost:hover{background:#f7f8fb;color:var(--dz-text)}
 .ddz-btn-red{background:var(--dz-red)}
-.ddz-float{position:fixed;right:18px;bottom:18px;z-index:2147483000;display:flex;align-items:center;gap:8px;background:var(--dz-blue);color:#fff;border:0;border-radius:10px;padding:9px 14px;font-size:14px;line-height:20px;font-weight:650;cursor:pointer;box-shadow:0 7px 14px rgba(54,75,180,.25);transition:background-color .18s ease,transform .18s ease}
-.ddz-float:hover{background:var(--dz-blue-hover);transform:translateY(-1px)}
-.ddz-float-title{font-weight:650}
-.ddz-float-subtitle{font-size:11px;line-height:16px;opacity:.82}
-.ddz-overlay{position:fixed;inset:0;z-index:2147482999;background:rgba(28,32,42,.26);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);animation:ddz-overlay-in .22s ease-out both}
-.ddz-modal{position:relative;background:var(--dz-panel);border-radius:18px;width:min(1180px,94vw);height:min(760px,92vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 42px rgba(26,32,47,.18);animation:ddz-modal-in .32s cubic-bezier(.22,1,.36,1) both}
+ .ddz-sidebar-entry-host{position:fixed;z-index:2147483000;pointer-events:none}
+ .ddz-sidebar-entry{appearance:none;width:100%;height:100%;display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid var(--dz-line);border-radius:11px;background:#fff;color:var(--dz-text);font:inherit;font-size:14px;line-height:20px;text-align:left;cursor:pointer;pointer-events:auto;box-sizing:border-box;transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease}
+ .ddz-sidebar-entry:hover{background:#f8f9ff;border-color:#cbd3ea;box-shadow:0 2px 6px rgba(26,32,47,.08)}
+ .ddz-sidebar-entry-host.is-active .ddz-sidebar-entry{background:#eef0f3;border-color:#d7dbe3;box-shadow:inset 0 0 0 1px #e2e5ea}
+ body[data-dsh-doudizhu-standalone="true"] [role="treeitem"][aria-selected="true"]:not(:hover){background-color:transparent!important;box-shadow:none!important}
+ .ddz-sidebar-entry:active{background:#f1f3ff}
+ .ddz-sidebar-entry:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
+ .ddz-sidebar-entry-icon{width:24px;height:24px;display:grid;place-items:center;flex:0 0 24px;border-radius:7px;background:#eef1ff;color:#304bc5;font-size:15px}
+ .ddz-sidebar-entry-copy{display:flex;flex-direction:column;min-width:0;gap:1px}
+ .ddz-sidebar-entry-title{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .ddz-sidebar-entry-subtitle{font-size:11px;line-height:15px;color:var(--dz-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .ddz-sidebar-entry-host.is-compact .ddz-sidebar-entry{justify-content:center;padding:0 6px}
+ .ddz-sidebar-entry-host.is-compact .ddz-sidebar-entry-copy{display:none}
+ .ddz-standalone-surface{position:fixed;inset:0 0 0 280px;z-index:2147482000;min-width:0;overflow:hidden;background:var(--dz-panel);border-left:1px solid var(--dz-line);animation:ddz-modal-in .24s cubic-bezier(.22,1,.36,1) both}
+ .ddz-conversation-page{position:relative;height:100%;min-height:0;background:var(--dz-panel)}
+ .ddz-conversation-popout{position:absolute;top:10px;right:18px;z-index:2;appearance:none;border:1px solid var(--dz-line);border-radius:8px;background:#fff;color:var(--dz-dim);padding:6px 9px;font:inherit;font-size:12px;cursor:pointer}
+ .ddz-conversation-popout:hover{background:#f2f4f8;color:var(--dz-text)}
+ .ddz-conversation-popout:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
+ .ddz-modal{position:relative;background:var(--dz-panel);border-radius:14px;width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden}
+ .ddz-pip-window{position:fixed;z-index:2147483647;overflow:hidden;border:1px solid var(--dz-line);border-radius:14px;background:var(--dz-panel);box-shadow:0 14px 34px rgba(26,32,47,.22);animation:ddz-modal-in .24s cubic-bezier(.22,1,.36,1) both}
+ .ddz-pip-window .ddz-modal{box-shadow:none;border-radius:0}
+ .ddz-pip-toolbar{height:42px;flex:0 0 42px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 16px;border-bottom:1px solid var(--dz-line);background:#fff;color:var(--dz-text);font-size:13px;font-weight:700;cursor:move;user-select:none;touch-action:none}
+ .ddz-pip-toolbar-actions{display:flex;align-items:center;gap:4px;cursor:default}
+ .ddz-pip-toolbar-btn{appearance:none;border:0;border-radius:7px;background:transparent;color:var(--dz-dim);padding:6px 8px;font:inherit;font-size:12px;cursor:pointer}
+ .ddz-pip-toolbar-btn:hover{background:#f2f4f8;color:var(--dz-text)}
+ .ddz-pip-toolbar-btn:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
+ .ddz-pip-resize-handle{position:absolute;z-index:4;touch-action:none}
+ .ddz-pip-resize-handle.is-n,.ddz-pip-resize-handle.is-s{left:12px;right:12px;height:8px;cursor:ns-resize}
+ .ddz-pip-resize-handle.is-n{top:0}
+ .ddz-pip-resize-handle.is-s{bottom:0}
+ .ddz-pip-resize-handle.is-e,.ddz-pip-resize-handle.is-w{top:12px;bottom:12px;width:8px;cursor:ew-resize}
+ .ddz-pip-resize-handle.is-e{right:0}
+ .ddz-pip-resize-handle.is-w{left:0}
+ .ddz-pip-resize-handle.is-ne,.ddz-pip-resize-handle.is-sw{width:14px;height:14px;cursor:nesw-resize}
+ .ddz-pip-resize-handle.is-ne{top:0;right:0}
+ .ddz-pip-resize-handle.is-sw{left:0;bottom:0}
+ .ddz-pip-resize-handle.is-nw,.ddz-pip-resize-handle.is-se{width:14px;height:14px;cursor:nwse-resize}
+ .ddz-pip-resize-handle.is-nw{top:0;left:0}
+ .ddz-pip-resize-handle.is-se{right:0;bottom:0}
 .ddz-corner-close{position:absolute;top:14px;right:16px;z-index:2;width:34px;height:34px;padding:0;border:1px solid transparent;border-radius:50%;background:transparent;color:var(--dz-dim);font-size:22px;line-height:1;cursor:pointer}
 .ddz-corner-close:hover{background:#f2f4f8;color:var(--dz-text)}
 .ddz-corner-close:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
@@ -202,8 +235,8 @@ const STYLE = `
 .ddz-dialog-title{font-size:17px;font-weight:800;margin:0 0 10px}
 .ddz-dialog-body{font-size:13px;line-height:1.7;color:var(--dz-dim);margin-bottom:16px}
 .ddz-dialog-code{display:block;background:#f2f4f8;border:1px solid var(--dz-line);border-radius:8px;padding:8px 10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dz-text);margin:8px 0 2px;word-break:break-all}
-@keyframes ddz-overlay-in{from{opacity:0}to{opacity:1}}
-@keyframes ddz-modal-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+ @keyframes ddz-overlay-in{from{opacity:0}to{opacity:1}}
+ @keyframes ddz-modal-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes ddz-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
 @keyframes ddz-picker-in{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes ddz-reveal-in{from{opacity:0;transform:translateY(-8px) scale(.94)}to{opacity:1;transform:none}}
@@ -218,8 +251,8 @@ const STYLE = `
 @keyframes ddz-action-ready{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes ddz-turn-pulse{0%,100%{box-shadow:0 2px 6px rgba(26,32,47,.08)}50%{box-shadow:0 0 0 3px rgba(77,107,254,.12),0 3px 8px rgba(77,107,254,.16)}}
 @keyframes ddz-countdown-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
-@media (max-width:720px){.ddz-modal{width:100vw;height:100vh;border-radius:0}.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-rank{font-size:16px}.ddz-card-rank.long{font-size:14px}.ddz-card-corner.top{top:4px;left:4px}.ddz-card-corner.bottom{right:4px;bottom:4px}.ddz-folded-cards .ddz-card-stack-item:not(:first-child){margin-left:-20px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}.ddz-float{right:12px;bottom:12px}}
-@media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-float,.ddz-card{transition:none}.ddz-card:hover,.ddz-float:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-overlay,.ddz-modal,.ddz-toast,.ddz-avatar-picker,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent,.ddz-special-play,.ddz-special-label{animation:none!important}}
+ @media (max-width:720px){.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-rank{font-size:16px}.ddz-card-rank.long{font-size:14px}.ddz-card-corner.top{top:4px;left:4px}.ddz-card-corner.bottom{right:4px;bottom:4px}.ddz-folded-cards .ddz-card-stack-item:not(:first-child){margin-left:-20px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}}
+ @media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-sidebar-entry,.ddz-card{transition:none}.ddz-card:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-pip-window,.ddz-modal,.ddz-toast,.ddz-avatar-picker,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent,.ddz-special-play,.ddz-special-label{animation:none!important}}
 `
 
 /* ============================== 基础组件 ============================== */
@@ -881,6 +914,7 @@ function LocalTable(props: {
       setNotice('没有能压过的牌，过吧')
       return
     }
+    setNotice(null)
     setSelected(h)
   }
 
@@ -1011,6 +1045,7 @@ function OnlineTable(props: {
     const last = view.lastPlayCards && view.lastPlayCards.length > 0 ? classify(view.lastPlayCards) : null
     const h = hintPlay(view.myHand, last)
     if (!h) { setNotice('没有能压过的牌，过吧'); return }
+    setNotice(null)
     setSelected(h)
   }
 
@@ -1078,8 +1113,269 @@ function Settle(props: {
 
 /* ============================== 应用根 ============================== */
 
+type PipBounds = { left: number; top: number; width: number; height: number }
+type PipResizeDirection = 'n' | 'e' | 's' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+type PipInteraction = {
+  kind: 'move' | 'resize'
+  direction?: PipResizeDirection
+  startX: number
+  startY: number
+  startBounds: PipBounds
+}
+
+const PIP_MIN_WIDTH = 360
+const PIP_MIN_HEIGHT = 280
+const PIP_MAX_WIDTH = 680
+const PIP_MAX_HEIGHT = 600
+
+function getPipLimits() {
+  const maxWidth = Math.max(1, window.innerWidth - 24)
+  const maxHeight = Math.max(1, window.innerHeight - 24)
+  return {
+    minWidth: Math.min(PIP_MIN_WIDTH, maxWidth),
+    minHeight: Math.min(PIP_MIN_HEIGHT, maxHeight),
+    maxWidth,
+    maxHeight,
+  }
+}
+
+function clampPipBounds(bounds: PipBounds): PipBounds {
+  const limits = getPipLimits()
+  const width = Math.min(Math.max(bounds.width, limits.minWidth), limits.maxWidth)
+  const height = Math.min(Math.max(bounds.height, limits.minHeight), limits.maxHeight)
+  return {
+    width,
+    height,
+    left: Math.min(Math.max(bounds.left, 0), Math.max(0, window.innerWidth - width)),
+    top: Math.min(Math.max(bounds.top, 0), Math.max(0, window.innerHeight - height)),
+  }
+}
+
+function getInitialPipBounds(): PipBounds {
+  const limits = getPipLimits()
+  const width = Math.min(PIP_MAX_WIDTH, limits.maxWidth)
+  const height = Math.min(PIP_MAX_HEIGHT, limits.maxHeight)
+  return clampPipBounds({
+    width,
+    height,
+    left: window.innerWidth - 18 - width,
+    top: window.innerHeight - 18 - height,
+  })
+}
+
+function resizePipBounds(start: PipBounds, direction: PipResizeDirection, deltaX: number, deltaY: number): PipBounds {
+  const limits = getPipLimits()
+  const right = start.left + start.width
+  const bottom = start.top + start.height
+  let left = start.left
+  let top = start.top
+  let width = start.width
+  let height = start.height
+
+  if (direction.includes('e')) {
+    const maxWidth = Math.min(limits.maxWidth, window.innerWidth - start.left)
+    width = Math.min(Math.max(start.width + deltaX, limits.minWidth), Math.max(limits.minWidth, maxWidth))
+  } else if (direction.includes('w')) {
+    const maxWidth = Math.min(limits.maxWidth, right)
+    width = Math.min(Math.max(start.width - deltaX, limits.minWidth), Math.max(limits.minWidth, maxWidth))
+    left = right - width
+  }
+
+  if (direction.includes('s')) {
+    const maxHeight = Math.min(limits.maxHeight, window.innerHeight - start.top)
+    height = Math.min(Math.max(start.height + deltaY, limits.minHeight), Math.max(limits.minHeight, maxHeight))
+  } else if (direction.includes('n')) {
+    const maxHeight = Math.min(limits.maxHeight, bottom)
+    height = Math.min(Math.max(start.height - deltaY, limits.minHeight), Math.max(limits.minHeight, maxHeight))
+    top = bottom - height
+  }
+
+  return clampPipBounds({ left, top, width, height })
+}
+
+function findHostNewSessionButton(): HTMLElement | null {
+  const candidates = document.querySelectorAll<HTMLElement>('button,[role="button"]')
+  return Array.from(candidates).find((element) => {
+    const text = (element.textContent ?? '').replace(/\s+/g, '')
+    const aria = `${element.getAttribute('aria-label') ?? ''}${element.getAttribute('title') ?? ''}`.replace(/\s+/g, '')
+    const className = String(element.className)
+    return text === '新会话'
+      || (aria.includes('新建会话') && (text.includes('新会话') || className.includes('newSession')))
+  }) ?? null
+}
+
+function findHostWorkspaceSection(): { header: HTMLElement; section: HTMLElement } | null {
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('*')).filter((element) => {
+    const rect = element.getBoundingClientRect()
+    return element.textContent?.trim() === '工作区' && rect.width > 0 && rect.height > 0
+  })
+  const label = candidates.sort((a, b) => a.getBoundingClientRect().height - b.getBoundingClientRect().height)[0]
+  const header = label?.tagName === 'SPAN' ? label.parentElement : label
+  const section = header?.parentElement
+  return header && section ? { header, section } : null
+}
+
+function findHostSidebarToggle(): HTMLElement | null {
+  const candidates = document.querySelectorAll<HTMLElement>('button,[role="button"]')
+  return Array.from(candidates).find((element) => {
+    const label = `${element.getAttribute('aria-label') ?? ''}${element.getAttribute('title') ?? ''}`.replace(/\s+/g, '')
+    return label.includes('侧边栏')
+  }) ?? null
+}
+
+function findHostSidebarRight(): number {
+  const target = findHostNewSessionButton()
+  const root = target?.closest<HTMLElement>('[class*="_root"]')
+  const rootRect = root?.getBoundingClientRect()
+  return rootRect && rootRect.width > 0 ? Math.round(rootRect.right) : 280
+}
+
+function findHostSidebarRoot(): HTMLElement | null {
+  return findHostNewSessionButton()?.closest<HTMLElement>('[class*="_root"]') ?? null
+}
+
+function SidebarEntry(props: { onOpen: () => void; active: boolean }) {
+  const { onOpen, active } = props
+  const [position, setPosition] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+
+  useEffect(() => {
+    let observedTarget: HTMLElement | null = null
+    let resizeObserver: ResizeObserver | null = null
+    let observedSection: HTMLElement | null = null
+    let sectionResizeObserver: ResizeObserver | null = null
+    let sectionReservation: { element: HTMLElement; originalMarginTop: string; reserve: number } | null = null
+
+    const clearSectionReservation = () => {
+      if (sectionReservation?.element.isConnected) {
+        sectionReservation.element.style.marginTop = sectionReservation.originalMarginTop
+      }
+      sectionReservation = null
+    }
+
+    const updatePosition = () => {
+      const target = findHostNewSessionButton()
+      if (target !== observedTarget) {
+        resizeObserver?.disconnect()
+        resizeObserver = null
+        observedTarget = target
+        if (target && typeof ResizeObserver !== 'undefined') {
+          resizeObserver = new ResizeObserver(updatePosition)
+          resizeObserver.observe(target)
+        }
+      }
+      if (!target) {
+        clearSectionReservation()
+        setPosition(null)
+        return
+      }
+      const rect = target.getBoundingClientRect()
+      const height = Math.max(40, Math.round(rect.height || 48))
+      const workspace = findHostWorkspaceSection()
+      if (workspace?.section !== observedSection) {
+        sectionResizeObserver?.disconnect()
+        sectionResizeObserver = null
+        observedSection = workspace?.section ?? null
+        if (observedSection && typeof ResizeObserver !== 'undefined') {
+          sectionResizeObserver = new ResizeObserver(updatePosition)
+          sectionResizeObserver.observe(observedSection)
+        }
+      }
+      if (workspace && workspace.section !== sectionReservation?.element) {
+        clearSectionReservation()
+        sectionReservation = {
+          element: workspace.section,
+          originalMarginTop: workspace.section.style.marginTop,
+          reserve: 0,
+        }
+      }
+      if (workspace && sectionReservation) {
+        const requiredTop = rect.bottom + 8 + height + 8
+        const currentTop = workspace.header.getBoundingClientRect().top
+        const baseTop = currentTop - sectionReservation.reserve
+        const reserve = Math.max(0, Math.ceil(requiredTop - baseTop))
+        if (sectionReservation.reserve !== reserve) {
+          workspace.section.style.marginTop = reserve > 0
+            ? `${reserve}px`
+            : sectionReservation.originalMarginTop
+          sectionReservation.reserve = reserve
+        }
+      } else {
+        clearSectionReservation()
+      }
+      const toggle = findHostSidebarToggle()
+      const toggleRect = toggle?.getBoundingClientRect()
+      const workspaceVisible = Boolean(workspace)
+      const top = workspaceVisible
+        ? rect.bottom + 8
+        : Math.max(rect.bottom + 8, (toggleRect?.bottom ?? 0) + 8)
+      const nextPosition = {
+        left: Math.round(rect.left),
+        top: Math.max(8, Math.round(top)),
+        width: Math.max(36, Math.round(rect.width)),
+        height,
+      }
+      setPosition((previous) => previous
+        && previous.left === nextPosition.left
+        && previous.top === nextPosition.top
+        && previous.width === nextPosition.width
+        && previous.height === nextPosition.height
+        ? previous
+        : nextPosition)
+    }
+
+    const mutationObserver = new MutationObserver(updatePosition)
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'aria-label'],
+    })
+    window.addEventListener('resize', updatePosition)
+    document.addEventListener('transitionend', updatePosition, true)
+    document.addEventListener('animationend', updatePosition, true)
+    updatePosition()
+    return () => {
+      mutationObserver.disconnect()
+      resizeObserver?.disconnect()
+      sectionResizeObserver?.disconnect()
+      clearSectionReservation()
+      window.removeEventListener('resize', updatePosition)
+      document.removeEventListener('transitionend', updatePosition, true)
+      document.removeEventListener('animationend', updatePosition, true)
+    }
+  }, [])
+
+  const width = position?.width ?? Math.min(380, Math.max(48, window.innerWidth - 20))
+  const compact = width < 180
+  return createElement('div', {
+    className: 'ddz-sidebar-entry-host' + (compact ? ' is-compact' : '') + (active ? ' is-active' : ''),
+    style: {
+      left: position?.left ?? 10,
+      top: position?.top ?? 66,
+      width,
+      height: position?.height ?? 48,
+    },
+  },
+  createElement('button', {
+    type: 'button',
+    className: 'ddz-sidebar-entry',
+    'aria-label': active ? '关闭斗地主' : '打开斗地主',
+    'aria-pressed': active,
+    onClick: onOpen,
+  },
+    createElement('span', { className: 'ddz-sidebar-entry-icon', 'aria-hidden': true }, '🃏'),
+    createElement('span', { className: 'ddz-sidebar-entry-copy' },
+      createElement('span', { className: 'ddz-sidebar-entry-title' }, '斗地主'),
+      createElement('span', { className: 'ddz-sidebar-entry-subtitle' }, '打开斗地主工作区'),
+    ),
+  ))
+}
+
 export function DoudizhuApp() {
   const [open, setOpen] = useState(false)
+  const [standaloneOpen, setStandaloneOpen] = useState(false)
+  const [sidebarRight, setSidebarRight] = useState(280)
+  const [pipBounds, setPipBounds] = useState<PipBounds>(() => getInitialPipBounds())
   const [profile, setProfile] = useState<Profile>(() => loadProfile())
   const [balance, setBalance] = useState(() => loadBalance())
   const [claimed, setClaimed] = useState(() => localStorage.getItem('ddz:claim') === todayKey())
@@ -1096,6 +1392,8 @@ export function DoudizhuApp() {
   const [versionError, setVersionError] = useState<{ clientProtocol: number; serverProtocol: number; serverVersion: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
+  const pipInteractionRef = useRef<PipInteraction | null>(null)
+  const pipBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const [syncing, setSyncing] = useState(false)
   const syncRef = useRef<Promise<void> | null>(null)
 
@@ -1103,7 +1401,7 @@ export function DoudizhuApp() {
   // 仅在「在线 + 面板打开 + 处于大厅」时轮询，避免后台/对局中空转请求。
   // 顺带做协议一致性兜底：服务器协议变了就弹强制更新。
   useEffect(() => {
-    if (!online || !open || screen !== 'lobby') {
+    if (!online || (!standaloneOpen && !open) || screen !== 'lobby') {
       setLobbyLatencyMs(null)
       return
     }
@@ -1129,7 +1427,114 @@ export function DoudizhuApp() {
       disposed = true
       window.clearInterval(timer)
     }
-  }, [online, open, screen])
+  }, [online, open, standaloneOpen, screen])
+
+  useEffect(() => {
+    const updateSidebarRight = () => setSidebarRight(findHostSidebarRight())
+    const observer = new MutationObserver(updateSidebarRight)
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
+    window.addEventListener('resize', updateSidebarRight)
+    updateSidebarRight()
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateSidebarRight)
+    }
+  }, [])
+
+  useEffect(() => {
+    const closeOnHostNavigation = (event: MouseEvent) => {
+      if (!standaloneOpen && !open) return
+      const target = event.target
+      if (!(target instanceof HTMLElement) || target.closest('[data-dsh-doudizhu]')) return
+      const sidebar = findHostSidebarRoot()
+      if (!sidebar || !sidebar.contains(target)) return
+      const navigationItem = target.closest('[role="treeitem"]')
+      const newSession = findHostNewSessionButton()
+      if (!navigationItem && !newSession?.contains(target)) return
+      setStandaloneOpen(false)
+    }
+    document.addEventListener('click', closeOnHostNavigation, true)
+    return () => document.removeEventListener('click', closeOnHostNavigation, true)
+  }, [open, standaloneOpen])
+
+  useEffect(() => {
+    if (standaloneOpen) {
+      document.body.dataset.dshDoudizhuStandalone = 'true'
+    } else {
+      delete document.body.dataset.dshDoudizhuStandalone
+    }
+    return () => { delete document.body.dataset.dshDoudizhuStandalone }
+  }, [standaloneOpen])
+
+  useEffect(() => {
+    if (!open) return
+    const endInteraction = () => {
+      pipInteractionRef.current = null
+      if (pipBodyStyleRef.current) {
+        document.body.style.cursor = pipBodyStyleRef.current.cursor
+        document.body.style.userSelect = pipBodyStyleRef.current.userSelect
+        pipBodyStyleRef.current = null
+      }
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      const interaction = pipInteractionRef.current
+      if (!interaction) return
+      const deltaX = event.clientX - interaction.startX
+      const deltaY = event.clientY - interaction.startY
+      setPipBounds(interaction.kind === 'move'
+        ? clampPipBounds({
+            ...interaction.startBounds,
+            left: interaction.startBounds.left + deltaX,
+            top: interaction.startBounds.top + deltaY,
+          })
+        : resizePipBounds(interaction.startBounds, interaction.direction!, deltaX, deltaY))
+    }
+    const onWindowResize = () => setPipBounds((current) => clampPipBounds(current))
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', endInteraction)
+    window.addEventListener('pointercancel', endInteraction)
+    window.addEventListener('resize', onWindowResize)
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', endInteraction)
+      window.removeEventListener('pointercancel', endInteraction)
+      window.removeEventListener('resize', onWindowResize)
+      endInteraction()
+    }
+  }, [open])
+
+  const beginPipInteraction = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    interaction: Pick<PipInteraction, 'kind' | 'direction'>,
+  ) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (!pipBodyStyleRef.current) {
+      pipBodyStyleRef.current = { cursor: document.body.style.cursor, userSelect: document.body.style.userSelect }
+    }
+    pipInteractionRef.current = {
+      ...interaction,
+      startX: event.clientX,
+      startY: event.clientY,
+      startBounds: pipBounds,
+    }
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = interaction.kind === 'move'
+      ? 'grabbing'
+      : interaction.direction === 'n' || interaction.direction === 's' ? 'ns-resize'
+        : interaction.direction === 'e' || interaction.direction === 'w' ? 'ew-resize'
+          : interaction.direction === 'ne' || interaction.direction === 'sw' ? 'nesw-resize' : 'nwse-resize'
+  }
+
+  const startPipMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button')) return
+    beginPipInteraction(event, { kind: 'move' })
+  }
+
+  const startPipResize = (direction: PipResizeDirection) => (event: ReactPointerEvent<HTMLDivElement>) => {
+    beginPipInteraction(event, { kind: 'resize', direction })
+  }
 
   const copyUpdateCmd = () => {
     const cmd = 'dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu'
@@ -1308,6 +1713,44 @@ export function DoudizhuApp() {
     setScreen('lobby')
   }
 
+  const requestPip = () => {
+    setStandaloneOpen(false)
+    setOpen(true)
+  }
+  const toggleStandalone = () => {
+    setOpen(false)
+    setStandaloneOpen((current) => !current)
+  }
+  const closeSurface = () => {
+    if (standaloneOpen) {
+      setStandaloneOpen(false)
+    } else {
+      setOpen(false)
+    }
+  }
+  const panelContent = createElement(Fragment, null,
+    screen === 'lobby' && createElement(Lobby, {
+      profile, balance, claimed, online, matching, matchCount, rescued, syncing, lobbyLatency: lobbyLatencyMs,
+      onClaim: claim,
+      onRescue: rescue,
+      onModeChange: (nextOnline) => { if (nextOnline === online) return; if (nextOnline) enterOnline(); else leaveOnline() },
+      onStartLocal: startLocal,
+      onStartOnline: startOnline,
+      onCancelMatch: cancelMatch,
+      onProfileChange: updateProfile,
+      onClose: closeSurface,
+    }),
+    screen === 'table' && (online && roomId
+      ? createElement(OnlineTable, { roomId, tableId, profile, onExit: exitTable, onSettled: onSettledOnline })
+      : createElement(LocalTable, {
+          tableId, base: tableById(tableId)?.base ?? 0, profile, balance,
+          onExit: exitTable, onFinished: onFinishedLocal,
+        })),
+    screen === 'settle' && result && createElement(Settle, {
+      result, balance, onExit: () => setScreen('lobby'),
+    }),
+  )
+
   return createElement('div', { className: 'ddz-root' },
     createElement('style', null, STYLE),
     notice && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
@@ -1327,31 +1770,40 @@ export function DoudizhuApp() {
         ),
       ),
     ),
-    createElement('button', { className: 'ddz-float', onClick: () => setOpen((v) => !v) },
-      createElement('span', { className: 'ddz-float-title' }, '🃏 斗地主'),
-      createElement('span', { className: 'ddz-float-subtitle' }, online ? '在线对战' : '等待中，来一把')),
-    open && createElement('div', { className: 'ddz-overlay', onClick: (e: { target: unknown; currentTarget: unknown }) => { if (e.target === e.currentTarget) setOpen(false) } },
+    createElement(SidebarEntry, { onOpen: toggleStandalone, active: standaloneOpen || open }),
+    standaloneOpen && createElement('div', {
+      className: 'ddz-standalone-surface',
+      role: 'main',
+      'aria-label': '斗地主独立工作区',
+      style: { left: sidebarRight },
+    },
+      createElement('div', { className: 'ddz-conversation-page' },
+        createElement('button', { type: 'button', className: 'ddz-conversation-popout', onClick: requestPip, 'aria-label': '打开斗地主画中画小窗' }, '小窗'),
+        createElement('div', { className: 'ddz-modal' }, panelContent),
+      ),
+    ),
+    open && createElement('div', {
+      className: 'ddz-pip-window',
+      role: 'dialog',
+      'aria-label': '斗地主画中画小窗',
+      style: { left: pipBounds.left, top: pipBounds.top, width: pipBounds.width, height: pipBounds.height },
+    },
       createElement('div', { className: 'ddz-modal' },
-        createElement('button', { className: 'ddz-corner-close', 'aria-label': '关闭斗地主', onClick: () => setOpen(false) }, '×'),
-        screen === 'lobby' && createElement(Lobby, {
-          profile, balance, claimed, online, matching, matchCount, rescued, syncing, lobbyLatency: lobbyLatencyMs,
-          onClaim: claim,
-          onRescue: rescue,
-          onModeChange: (nextOnline) => { if (nextOnline === online) return; if (nextOnline) enterOnline(); else leaveOnline() },
-          onStartLocal: startLocal,
-          onStartOnline: startOnline,
-          onCancelMatch: cancelMatch,
-          onProfileChange: updateProfile,
-          onClose: () => setOpen(false),
-        }),
-        screen === 'table' && (online && roomId
-          ? createElement(OnlineTable, { roomId, tableId, profile, onExit: exitTable, onSettled: onSettledOnline })
-          : createElement(LocalTable, {
-              tableId, base: tableById(tableId)?.base ?? 0, profile, balance,
-              onExit: exitTable, onFinished: onFinishedLocal,
-            })),
-        screen === 'settle' && result && createElement(Settle, {
-          result, balance, onExit: () => setScreen('lobby'),
+        createElement('div', { className: 'ddz-pip-toolbar', onPointerDown: startPipMove },
+          createElement('span', null, '斗地主'),
+          createElement('div', { className: 'ddz-pip-toolbar-actions' },
+            createElement('button', { type: 'button', className: 'ddz-pip-toolbar-btn', onClick: () => { setOpen(false); setStandaloneOpen(true) } }, '放回斗地主工作区'),
+            createElement('button', { type: 'button', className: 'ddz-pip-toolbar-btn', 'aria-label': '关闭斗地主小窗', onClick: () => setOpen(false) }, '×'),
+            ),
+          ),
+        panelContent,
+      ),
+      (['n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw'] as PipResizeDirection[]).map((direction) =>
+        createElement('div', {
+          key: direction,
+          className: `ddz-pip-resize-handle is-${direction}`,
+          'aria-hidden': true,
+          onPointerDown: startPipResize(direction),
         }),
       ),
     ),

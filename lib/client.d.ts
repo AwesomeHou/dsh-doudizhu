@@ -1,9 +1,8 @@
 
+import { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
 //#region src/client/index.d.ts
-/** 客户端所需服务（M1 无需额外服务） */
+/** 独立工作区只需要客户端运行时挂载能力。 */
 declare const inject: string[];
-declare function apply(ctx: {
-  effect(fn: () => (() => void) | void, label?: string): void;
-}): void;
+declare function apply(ctx: ClientContext): void;
 //#endregion
 export { apply, inject };

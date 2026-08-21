@@ -6,7 +6,7 @@
 src/
 ├── index.ts          # Cordis 服务端插件入口；当前仅做加载确认
 └── client/           # React 客户端 UI（注入 DSH Web GUI）
-    ├── index.tsx     # 客户端挂载入口（body portal + createRoot）
+    ├── index.tsx     # 客户端挂载入口（body portal + 独立工作区 + createRoot）
     ├── App.tsx       # 大厅、本地/在线牌桌、结算与交互
     ├── api.ts        # 云端 REST / WebSocket 客户端（身份/签到/匹配/房间）
     ├── table-view.ts # 统一牌桌视图模型（本地引擎状态 ↔ 线上 WS 状态）

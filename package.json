@@ -1,6 +1,6 @@
 {
   "name": "dsh-doudizhu",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "DSH web plugin: 斗地主 — play Dou Dizhu in the DeepSeek Harness GUI while waiting for the agent to reply.",
   "type": "module",
   "private": true,
@@ -29,13 +29,7 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-slots",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-web-react"
-      ],
+      "inject": ["@deepseek-ai/dsh-client-runtime"],
       "platform": "web"
     }
   },

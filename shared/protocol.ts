@@ -12,7 +12,7 @@
 export const PROTOCOL_VERSION = 1
 
 /** 应用版本（须与根 package.json version 同步） */
-export const APP_VERSION = '0.2.1'
+export const APP_VERSION = '0.2.2'
 
 /** 服务器 /api/health 返回的版本信息，客户端据此做兼容性检查 */
 export interface HealthInfo {

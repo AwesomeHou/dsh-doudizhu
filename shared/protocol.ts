@@ -12,7 +12,7 @@
 export const PROTOCOL_VERSION = 1
 
 /** 应用版本（须与根 package.json version 同步） */
-export const APP_VERSION = '0.2.2'
+export const APP_VERSION = '0.2.3'
 
 /** 服务器 /api/health 返回的版本信息，客户端据此做兼容性检查 */
 export interface HealthInfo {
@@ -41,6 +41,7 @@ export interface GameStateForPlayer {
   hand: WireCard[]                 // 只有自己能看到
   bottom: WireCard[]               // 地主确认后可见
   landlord: number | null
+  hasCalled: boolean                // 叫地主阶段是否已经有人叫过
   current: number
   callOrder: number[]
   callActor: number

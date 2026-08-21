@@ -17,6 +17,7 @@ describe('牌桌视图的叫地主阶段', () => {
 
     expect(view.phase).toBe('calling')
     expect(view.landlord).toBeNull()
+    expect(view.hasCalled).toBe(true)
     expect(view.bottom).toEqual([])
     expect(view.seats.every((seat) => seat.role === null)).toBe(true)
   })
@@ -31,6 +32,7 @@ describe('牌桌视图的叫地主阶段', () => {
 
     expect(view.phase).toBe('playing')
     expect(view.landlord).toBe(firstCaller)
+    expect(view.hasCalled).toBe(true)
     expect(view.bottom).toHaveLength(3)
     expect(view.seats.find((seat) => seat.seat === firstCaller)?.role).toBe('landlord')
   })

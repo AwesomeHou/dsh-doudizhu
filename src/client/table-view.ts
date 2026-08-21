@@ -24,6 +24,7 @@ export interface TableView {
   myHand: Card[]
   bottom: Card[]
   landlord: Seat | null
+  hasCalled: boolean
   current: Seat
   callOrder: Seat[]
   callActor: number
@@ -65,6 +66,7 @@ export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<
     myHand: s.hands[mySeat]!.map((c) => ({ ...c })),
     bottom: landlord === null ? [] : s.bottom.map((c) => ({ ...c })),
     landlord,
+    hasCalled: s.landlord !== null,
     current: s.current,
     callOrder: s.callOrder,
     callActor: s.callActor,
@@ -90,6 +92,7 @@ export function tableViewFromProtocol(p: GameStateForPlayer): TableView {
     myHand: p.hand.map((c) => ({ r: c.r as Card['r'], s: c.s as Card['s'] })),
     bottom: p.bottom.map((c) => ({ r: c.r as Card['r'], s: c.s as Card['s'] })),
     landlord: p.landlord as Seat | null,
+    hasCalled: p.hasCalled,
     current: p.current as Seat,
     callOrder: p.callOrder.map((s) => s as Seat),
     callActor: p.callActor,
@@ -124,6 +127,7 @@ export function emptyTableView(mySeat: Seat = 0, myNickname = '你', myAvatar = 
     myHand: [],
     bottom: [],
     landlord: null,
+    hasCalled: false,
     current: mySeat,
     callOrder: [0, 1, 2] as Seat[],
     callActor: 0,

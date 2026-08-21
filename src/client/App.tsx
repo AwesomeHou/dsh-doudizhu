@@ -224,6 +224,7 @@ const STYLE = `
 .ddz-latency b{font-variant-numeric:tabular-nums;color:var(--dz-text);font-weight:700}
 .ddz-latency-sep{margin:0 2px;opacity:.5}
 .ddz-lobby-version{flex:0 0 auto;text-align:center;padding:8px 0 2px;font-size:11px;color:var(--dz-dim)}
+.ddz-disclaimer{flex:0 0 auto;text-align:center;padding:2px 8px 6px;font-size:11px;color:var(--dz-dim)}
 .ddz-lobby-latency{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dz-dim);margin-top:8px}
 .ddz-lobby-latency .ddz-latency-dot{width:8px;height:8px}
 .ddz-lobby-latency.good .ddz-latency-dot{background:#2f9e62}
@@ -386,10 +387,11 @@ function GameTableShell(props: {
   onPass: () => void
   onHint: () => void
   onCall: (call: boolean) => void
+  callAnnouncement: string | null
   onExit: () => void
   onDismissNotice: () => void
 }) {
-  const { view, selected, notice, remainingSeconds, onToggleCard, onPlay, onPass, onHint, onCall, onExit, onDismissNotice } = props
+  const { view, selected, notice, remainingSeconds, onToggleCard, onPlay, onPass, onHint, onCall, callAnnouncement, onExit, onDismissNotice } = props
   const [playedBySeat, setPlayedBySeat] = useState<PlayedBySeat>(() => [null, null, null])
 
   // 每位玩家保留本轮最近一次出的牌
@@ -425,6 +427,7 @@ function GameTableShell(props: {
     return selected.every((c) => view.myHand.some((x) => x.r === c.r && x.s === c.s))
   }
   const showCountdown = remainingSeconds !== null && remainingSeconds > 0
+  const callLabel = view.hasCalled ? '抢地主' : '叫地主'
 
   return createElement('div', { className: 'ddz-body ddz-table-screen' },
     createElement('button', { className: 'ddz-table-exit', onClick: onExit }, '← 退出牌桌'),
@@ -461,9 +464,11 @@ function GameTableShell(props: {
         ),
         createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
           createElement('div', { className: 'ddz-table-turn-label' },
-            view.phase === 'playing'
-              ? (isMyTurn ? '轮到你出牌' : '对手出牌中…')
-              : ''),
+            view.phase === 'calling'
+              ? (callAnnouncement ?? (isMyTurn ? `轮到你${callLabel}` : '等待叫地主…'))
+              : view.phase === 'playing'
+                ? (callAnnouncement ?? (isMyTurn ? '轮到你出牌' : '对手出牌中…'))
+                : ''),
         ),
         createElement('div', { className: 'ddz-side-zone right' },
           botB && createElement(PlayedArea, {
@@ -497,8 +502,8 @@ function GameTableShell(props: {
           view.phase === 'calling'
             ? (isMyTurn
                 ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
-                    createElement('button', { className: 'ddz-btn', onClick: () => onCall(true) }, '叫地主'),
-                    createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => onCall(false) }, '不叫'),
+                    createElement('button', { className: 'ddz-btn', onClick: () => onCall(true) }, callLabel),
+                    createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => onCall(false) }, view.hasCalled ? '不抢' : '不叫'),
                   )
                 : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
             : (view.phase === 'playing'
@@ -765,12 +770,15 @@ function Lobby(props: {
         online ? '余额不足该桌门槛，先签到或领救济金' : '余额不足该桌底注，先签到或换低倍桌'),
     ),
     createElement('div', { className: 'ddz-lobby-version' }, `斗地主 v${APP_VERSION}`),
+    createElement('div', { className: 'ddz-disclaimer' }, 'Token 为虚拟货币，仅作娱乐用途，不可兑换任何真实货币或服务（性质类似欢乐豆）'),
   )
 }
 
 /* ============================== 本地牌桌（机器人） ============================== */
 
 const HUMAN_SEAT: Seat = 0
+const CALL_ACTION_DELAY_MS = 1_200
+const CALL_ANNOUNCEMENT_MS = 1_650
 const LOCAL_SEAT_META = [
   { nickname: '你', avatarId: 'default-01', tokenBalance: 0 },
   { nickname: '机器人·蓝', avatarId: 'default-01', tokenBalance: 35_800_000 },
@@ -791,6 +799,7 @@ function LocalTable(props: {
   const [busy, setBusy] = useState(false)
   const randomRef = useRef(Math.random)
   const [notice, setNotice] = useState<string | null>(null)
+  const [callAnnouncement, setCallAnnouncement] = useState<string | null>(null)
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null)
   const [clock, setClock] = useState(() => Date.now())
 
@@ -798,6 +807,22 @@ function LocalTable(props: {
     ? { ...m, nickname: profile.nickname, avatarId: profile.avatarId, tokenBalance: balance }
     : m), [profile.nickname, profile.avatarId, balance])
   const view = useMemo(() => tableViewFromEngine(state, HUMAN_SEAT, seatMeta), [state, seatMeta])
+
+  // 出牌提示只属于当前回合，轮到下一位玩家时不能带入后续回合。
+  const previousTurnRef = useRef(`${state.phase}:${state.current}`)
+  useEffect(() => {
+    const turnKey = `${state.phase}:${state.current}`
+    if (previousTurnRef.current !== turnKey) setNotice(null)
+    previousTurnRef.current = turnKey
+  }, [state.phase, state.current])
+
+  const announceCall = (seat: Seat, call: boolean, hasCalled: boolean) => {
+    const name = seatMeta[seat]?.nickname ?? `座位${seat}`
+    const action = hasCalled ? (call ? '抢地主' : '不抢') : (call ? '叫地主' : '不叫')
+    const message = `${name}${action}`
+    setCallAnnouncement(message)
+    window.setTimeout(() => setCallAnnouncement((current) => current === message ? null : current), CALL_ANNOUNCEMENT_MS)
+  }
 
   // 每次进入出牌阶段或轮转座位时，重置 25 秒出牌计时
   useEffect(() => {
@@ -842,7 +867,9 @@ function LocalTable(props: {
     const timer = window.setTimeout(() => {
       const seat = state.current
       if (state.phase === 'calling') {
+        const hasCalled = state.landlord !== null
         const call = botCall(state.hands[seat]!, randomRef.current)
+        announceCall(seat, call, hasCalled)
         setState((s) => {
           try { return applyAction(s, { type: 'call', seat, call }) } catch { return s }
         })
@@ -856,7 +883,7 @@ function LocalTable(props: {
           } catch { return s }
         })
       }
-    }, 650)
+    }, state.phase === 'calling' ? CALL_ACTION_DELAY_MS : 650)
     return () => window.clearTimeout(timer)
   }, [state])
 
@@ -892,6 +919,7 @@ function LocalTable(props: {
   const humanAct = (action: { type: 'play'; cards: Card[] } | { type: 'pass' } | { type: 'call'; call: boolean }) => {
     try {
       if (action.type === 'call') {
+        announceCall(HUMAN_SEAT, action.call, state.landlord !== null)
         setState((s) => applyAction(s, { type: 'call', seat: HUMAN_SEAT, call: action.call }))
         setBusy(true)
         window.setTimeout(() => setBusy(false), 300)
@@ -933,6 +961,7 @@ function LocalTable(props: {
     onPass: () => humanAct({ type: 'pass' }),
     onHint: doHint,
     onCall: (call) => humanAct({ type: 'call', call }),
+    callAnnouncement,
     onExit,
     onDismissNotice: () => setNotice(null),
   })
@@ -1080,6 +1109,7 @@ function OnlineTable(props: {
       onPass: () => send({ v: PROTOCOL_VERSION, t: 'pass', d: {} }),
       onHint: doHint,
       onCall: (call) => send({ v: PROTOCOL_VERSION, t: 'call', d: { call } }),
+      callAnnouncement: null,
       onExit,
       onDismissNotice: () => setNotice(null),
     }),
@@ -1585,15 +1615,19 @@ export function DoudizhuApp() {
         const r = await api.claimDaily()
         setBalance(r.balance)
         setClaimed(true)
+        // 服务端已入账，持久化「今日已领」标记，避免刷新后误以为还能再领
+        localStorage.setItem('ddz:claim', todayKey())
         setNotice(`每日签到 +${r.amount.toLocaleString()}`)
       } catch (e) {
-        // 已领取 → 同步服务端状态
+        // 已领取 → 同步服务端状态并给出明确提示（跨会话/跨设备时按钮可能重新可点）
         if ((e instanceof Error && e.message.includes('already claimed')) || String(e).includes('409')) {
           setClaimed(true)
+          localStorage.setItem('ddz:claim', todayKey())
           try {
             const me = await api.getMe()
             setBalance(me.player.balance)
           } catch { /* ignore */ }
+          setNotice('今天已经签到过了，明天再来吧')
         } else {
           setNotice(e instanceof Error ? e.message : '签到失败')
         }

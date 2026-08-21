@@ -312,6 +312,7 @@ export class Room {
       hand: game.hands[seat]!.map((c) => ({ r: c.r, s: c.s })),
       bottom: landlord === null ? [] : game.bottom.map((c) => ({ r: c.r, s: c.s })),
       landlord,
+      hasCalled: game.landlord !== null,
       current: game.current,
       callOrder: game.callOrder,
       callActor: game.callActor,

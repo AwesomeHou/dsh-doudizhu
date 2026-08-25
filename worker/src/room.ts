@@ -23,6 +23,8 @@ interface SeatState {
   avatarId: string
   tokenBalance: number
   connected: boolean
+  /** 机器人补位座位：无 WS，由服务端按人性化节奏自动出牌，伪装成在线真人 */
+  isBot?: boolean
 }
 
 const TURN_MS = CONFIG.turnTimeoutMs
@@ -98,6 +100,22 @@ export class Room {
         avatarId: p?.avatarId ?? 'default-01',
         tokenBalance: p?.tokenBalance ?? 0,
         connected: true,
+      }
+    }
+    // 机器人座位没有 WS 连接，按 meta 填充（对客户端伪装成在线真人）
+    if (this.meta) {
+      for (const p of this.meta.players) {
+        if (p.uid.startsWith('bot:') && !this.seats[p.seat]) {
+          this.seats[p.seat] = {
+            uid: p.uid,
+            ws: null,
+            nickname: p.nickname,
+            avatarId: p.avatarId,
+            tokenBalance: p.tokenBalance,
+            connected: true,
+            isBot: true,
+          }
+        }
       }
     }
   }
@@ -224,8 +242,15 @@ export class Room {
     this.clearTimer()
     if (!this.game || this.game.finished || this.game.phase === 'settled') return
     const seat = this.game.current
-    const connected = this.seats[seat]?.connected ?? false
-    const delay = connected ? TURN_MS : AUTO_DISCONNECT_MS
+    const s = this.seats[seat]
+    let delay: number
+    if (s?.isBot) {
+      // 机器人模仿真人思考节奏：叫地主稍慢，出牌 0.9–2.5s 随机
+      delay = this.game.phase === 'calling' ? 1400 + Math.random() * 1200 : 900 + Math.random() * 1600
+    } else {
+      const connected = s?.connected ?? false
+      delay = connected ? TURN_MS : AUTO_DISCONNECT_MS
+    }
     this.turnTimer = setTimeout(() => void this.autoAct(seat), delay)
   }
 
@@ -269,10 +294,15 @@ export class Room {
       const st = this.seats[i]
       if (!st) continue
       const delta = s.deltas[i]
-      try {
-        balances[st.uid] = await addLedger(this.env, st.uid, delta >= 0 ? 'game_in' : 'game_out', delta, meta.id)
-      } catch {
+      if (st.isBot) {
+        // 机器人是虚拟账号，不入 D1 流水，本地累加即可
         balances[st.uid] = st.tokenBalance + delta
+      } else {
+        try {
+          balances[st.uid] = await addLedger(this.env, st.uid, delta >= 0 ? 'game_in' : 'game_out', delta, meta.id)
+        } catch {
+          balances[st.uid] = st.tokenBalance + delta
+        }
       }
       playerRows.push({
         uid: st.uid, seat: i, role: roleOf(game, i as Seat),

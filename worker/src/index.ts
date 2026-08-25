@@ -63,7 +63,7 @@ app.post('/api/auth', async (c) => {
   }
   const player = await upsertPlayer(c.env, uid, limitNickname(undefined), 'default-01')
   const token = await signToken(c.env.AUTH_SECRET, uid)
-  return c.json({ token, player: publicPlayer(player) })
+  return c.json({ token, player: await publicPlayer(c.env, player) })
 })
 
 app.get('/api/me', async (c) => {
@@ -71,7 +71,7 @@ app.get('/api/me', async (c) => {
   try { payload = await auth(c) } catch { return fail(c, 401, 'unauthorized') }
   const player = await getPlayer(c.env, payload.uid)
   if (!player) return fail(c, 404, 'player not found')
-  return c.json({ player: publicPlayer(player) })
+  return c.json({ player: await publicPlayer(c.env, player) })
 })
 
 app.put('/api/me/profile', async (c) => {
@@ -82,7 +82,7 @@ app.put('/api/me/profile', async (c) => {
   const avatarId = validAvatar(body?.avatarId)
   await updateProfile(c.env, payload.uid, nickname, avatarId)
   const player = await getPlayer(c.env, payload.uid)
-  return c.json({ player: publicPlayer(player!) })
+  return c.json({ player: await publicPlayer(c.env, player!) })
 })
 
 // ---- 签到 / 流水 ----
@@ -227,7 +227,7 @@ app.get('/api/admin/rooms/cleanup', async (c) => {
   return c.json({ ok: true })
 })
 
-function publicPlayer(p: PlayerRow) {
+async function publicPlayer(env: Env, p: PlayerRow) {
   return {
     uid: p.uid,
     nickname: p.nickname,
@@ -236,6 +236,7 @@ function publicPlayer(p: PlayerRow) {
     peakBalance: p.peak_balance,
     rank: rankForBalance(p.balance).name,
     rankId: rankForBalance(p.balance).id,
+    claimedToday: await hasClaimed(env, p.uid, dayKeyUTC8()),
   }
 }
 

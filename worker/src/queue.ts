@@ -15,6 +15,29 @@ const uidRoomKey = (uid: string) => `roomuid:${uid}`
 const ROOM_TTL_SECONDS = 7200
 /** 队列条目视为过期的时长（进入后 3 分钟未凑满则作废） */
 const QUEUE_STALE_MS = 3 * 60_000
+/** 真人凑不齐时的补位等待：超过该时长（15s）则用机器人垫满 3 人开局 */
+const BOT_FILL_MS = 15_000
+
+/**
+ * 机器人昵称池：模拟真人取名习惯（无“机器人/AI/Bot”字样），头像二选一。
+ */
+const BOT_NAMES = [
+  '清风徐来', '晚风轻语', '南山南', '一壶清茶', '夜未央', '拾光者', '北辰星', '云深不知处',
+  '江南烟雨', '半盏流年', '听风说雨', '岁月静好', '薄荷微凉', '指尖流沙', '故里草木', '月光倾城',
+  '白鹿青崖', '孤舟蓑笠', '长安故里', '墨染青衣', '星河入梦', '小桥流水', '红叶煮酒', '枕边书',
+  '南巷清风', '北城旧梦', '山有木兮', '灯火阑珊', '云开月明', '拾壹月', '风起长林', '悠然自得',
+] as const
+
+function botEntry(): QueueEntry {
+  return {
+    uid: 'bot:' + crypto.randomUUID(),
+    nickname: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)]!,
+    avatarId: Math.random() < 0.5 ? 'default-01' : 'default-02',
+    // 固定大余额：模拟长期玩牌攒下家底的真人，避免被当作新手
+    tokenBalance: 8_000_000 + Math.floor(Math.random() * 12_000_000),
+    joinedAt: Date.now(),
+  }
+}
 
 export type JoinResult =
   | { status: 'waiting'; count: number }
@@ -47,6 +70,9 @@ export class Queue {
           return Response.json({ ok: true })
         }
         case 'status': {
+          // 轮询时顺便检查是否到 15s 补位（真人凑不齐 → 机器人垫满开局）
+          const matched = await this.tryCreateRoom(await this.load())
+          if (matched) return Response.json(matched)
           const queue = await this.load()
           const count = body.uid ? queue.some((e) => e.uid === body.uid) : false
           return Response.json({ status: 'waiting', count: count ? queue.length : 0 })
@@ -79,12 +105,24 @@ export class Queue {
     let queue = await this.load()
     queue = queue.filter((e) => e.uid !== entry.uid)
     queue.push(entry)
-    if (queue.length < 3) {
-      await this.save(queue)
-      return { status: 'waiting', count: queue.length }
-    }
+    const matched = await this.tryCreateRoom(queue)
+    if (matched) return matched
+    await this.save(queue)
+    return { status: 'waiting', count: queue.length }
+  }
+
+  /**
+   * 满足开局条件（够 3 人，或已等待 ≥ BOT_FILL_MS）时创建房间；不足则返回 null。
+   * 真人不足 3 人时用机器人垫满（模拟真人：真实感昵称 + 大余额）。
+   */
+  private async tryCreateRoom(queue: QueueEntry[]): Promise<JoinResult | null> {
+    if (queue.length === 0) return null
+    const oldest = Math.min(...queue.map((e) => e.joinedAt))
+    const waited = Date.now() - oldest >= BOT_FILL_MS
+    if (queue.length < 3 && !waited) return null
     const trio = queue.slice(0, 3)
     const rest = queue.slice(3)
+    while (trio.length < 3) trio.push(botEntry())
     const tableId = this.tableId
     const roomId = crypto.randomUUID()
     const roomMeta: RoomMeta = {
@@ -101,7 +139,9 @@ export class Queue {
       })),
     }
     await this.env.KVPUBLIC.put(roomKey(roomId), JSON.stringify(roomMeta), { expirationTtl: ROOM_TTL_SECONDS })
+    // 只有真人写 uid→room 映射（机器人无需重连/轮询）
     for (const p of roomMeta.players) {
+      if (p.uid.startsWith('bot:')) continue
       await this.env.KVPUBLIC.put(uidRoomKey(p.uid), roomId, { expirationTtl: ROOM_TTL_SECONDS })
     }
     await this.save(rest)

@@ -44,6 +44,8 @@ export interface PublicPlayer {
   peakBalance: number
   rank: string
   rankId: number
+  /** 服务端权威：今天是否已在线签到（独立于本地模式） */
+  claimedToday: boolean
 }
 
 /** 换取 token（服务端同时建档） */

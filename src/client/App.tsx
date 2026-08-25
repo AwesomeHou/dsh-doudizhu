@@ -1,24 +1,21 @@
 /**
- * dsh-doudizhu 客户端主界面（M1 本地 + M2 在线）
+ * dsh-doudizhu 客户端主界面（在线 PVP，真人不足时机器人补位）
  * - 侧边栏入口 + 独立斗地主工作区 + 可调整画中画小窗
- * - 大厅：昵称/头像/段位/余额、每日签到、桌别选择、本地/在线模式切换
- * - 牌桌（本地机器人 or 线上真人 PVP）：叫地主/抢地主 → 出牌/过/提示 → 结算
- * - 经济：本地 localStorage 模拟；在线走 Cloudflare Worker（服务端权威记账）
+ * - 大厅：昵称/头像/段位/余额、每日签到、桌别选择、匹配（15s 自动补机器人）
+ * - 牌桌（线上 PVP）：叫地主/抢地主 → 出牌/过/提示 → 结算
+ * - 经济：服务端权威记账（Cloudflare Worker）
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createElement, Fragment } from 'react'
 import { CONFIG, rankForBalance, tableById } from '../../shared/config.ts'
 import { cardName, sortHand } from '../../shared/engine/deck.ts'
-import { applyAction, createGame, type GameState } from '../../shared/engine/game.ts'
-import { settle } from '../../shared/engine/scoring.ts'
 import { classify, hintPlay } from '../../shared/engine/valid.ts'
 import { canBeat } from '../../shared/engine/compare.ts'
-import { botCall, botMove } from '../../shared/engine/bot.ts'
 import { KIND_NAMES, RANK_NAMES, SUIT_SYMBOLS, type Card, type Role, type Seat } from '../../shared/engine/types.ts'
 import { deepseekBlueUrl, deepseekBlackUrl } from './brandAssets.ts'
 import { PROTOCOL_VERSION, APP_VERSION } from '../../shared/protocol.ts'
 import * as api from './api.ts'
-import { tableViewFromEngine, tableViewFromProtocol, type TableView, type SeatView } from './table-view.ts'
+import { tableViewFromProtocol, type TableView, type SeatView } from './table-view.ts'
 
 /* ============================== 样式 ============================== */
 
@@ -108,7 +105,7 @@ const STYLE = `
 .ddz-tab{appearance:none;background:#fff;border:1px solid var(--dz-line);color:var(--dz-text);border-radius:10px;padding:14px;cursor:pointer;text-align:left;min-width:0;flex:1;font:inherit}
 .ddz-tab:hover{background:#fafbff;border-color:#cbd3ea}
 .ddz-tab.on{border-color:var(--dz-blue);box-shadow:0 0 0 1px var(--dz-blue);background:#fbfcff}
-.ddz-toast{position:fixed;left:50%;top:20px;transform:translateX(-50%);background:#fff;color:var(--dz-text);border:1px solid var(--dz-blue);border-radius:10px;padding:10px 18px;font-size:14px;z-index:2147483001;box-shadow:0 8px 12px rgba(26,32,47,.14);animation:ddz-toast-in .22s cubic-bezier(.22,1,.36,1) both}
+.ddz-toast{position:fixed;left:50%;top:20px;transform:translateX(-50%);background:#fff;color:var(--dz-text);border:1px solid var(--dz-blue);border-radius:10px;padding:10px 18px;font-size:14px;z-index:2147483001;box-shadow:0 8px 12px rgba(26,32,47,.14);animation:ddz-toast-life 2.6s cubic-bezier(.22,1,.36,1) both}
 .ddz-lobby{padding:30px 36px 36px}
 .ddz-lobby-top{display:flex;justify-content:flex-start;align-items:flex-start;gap:24px;margin-bottom:46px}
 .ddz-lobby-profile-stack{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
@@ -146,9 +143,7 @@ const STYLE = `
 .ddz-table-grid .ddz-tab>div:first-child{font-size:15px;margin-bottom:6px}
 .ddz-lobby-actions{display:flex;align-items:center;gap:10px;margin-top:22px}
 .ddz-helper{font-size:12px;margin-top:10px}
-.ddz-mode-switch{display:inline-flex;border:1px solid var(--dz-line);border-radius:999px;padding:3px;gap:2px;background:#f7f8fb}
-.ddz-mode-btn{appearance:none;border:0;background:transparent;border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--dz-dim);cursor:pointer}
-.ddz-mode-btn.on{background:#fff;color:#304bc5;box-shadow:0 1px 4px rgba(26,32,47,.12)}
+.ddz-lobby-connect{display:flex;align-items:center;gap:4px;font-size:13px;margin-top:4px}
 .ddz-table-screen{display:flex;flex-direction:column}
 .ddz-table-reserved-bar{height:44px;flex:0 0 44px;visibility:hidden}
 .ddz-game-table{min-height:0;gap:14px;padding:24px;background:#fbfcfd;border-color:#edf0f4;border-radius:18px}
@@ -239,6 +234,8 @@ const STYLE = `
  @keyframes ddz-overlay-in{from{opacity:0}to{opacity:1}}
  @keyframes ddz-modal-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes ddz-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+/* 反馈气泡生命周期：快速进入 → 停留 → 末尾淡出（2.6s 后由 JS 移除 DOM） */
+@keyframes ddz-toast-life{0%{opacity:0;transform:translate(-50%,-6px)}8%{opacity:1;transform:translate(-50%,0)}82%{opacity:1}100%{opacity:0}}
 @keyframes ddz-picker-in{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes ddz-reveal-in{from{opacity:0;transform:translateY(-8px) scale(.94)}to{opacity:1;transform:none}}
 @keyframes ddz-landlord-reveal{from{opacity:.72;transform:translateY(-5px) scale(.97);box-shadow:0 0 0 0 rgba(77,107,254,0)}50%{box-shadow:0 0 0 5px rgba(77,107,254,.12)}to{opacity:1;transform:none;box-shadow:none}}
@@ -410,6 +407,15 @@ function GameTableShell(props: {
       return next
     })
   }, [view.phase, view.lastActor, view.lastPlayCards])
+
+  // 反馈气泡自动淡出（约 2.6s），无需手动点击；用 ref 避免依赖回调身份
+  const dismissNoticeRef = useRef(onDismissNotice)
+  dismissNoticeRef.current = onDismissNotice
+  useEffect(() => {
+    if (!notice) return
+    const t = window.setTimeout(() => dismissNoticeRef.current(), 2600)
+    return () => window.clearTimeout(t)
+  }, [notice])
 
   const sortedHand = useMemo(() => sortHand(view.myHand), [view.myHand])
   const humanView = view.seats.find((s) => s.isHuman) ?? view.seats[view.mySeat]
@@ -585,16 +591,7 @@ function loadProfile(): Profile {
   return profile
 }
 
-function loadBalance(): number {
-  try { return Number(localStorage.getItem('ddz:balance') ?? 100_000) } catch { return 100_000 }
-}
-function saveBalance(v: number): void { localStorage.setItem('ddz:balance', String(v)) }
 function saveProfile(profile: Profile): void { localStorage.setItem('ddz:profile', JSON.stringify(profile)) }
-
-function todayKey(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
-}
 
 /* ============================== 大厅 ============================== */
 
@@ -609,9 +606,8 @@ function Lobby(props: {
   rescued: boolean
   syncing: boolean
   lobbyLatency: number | null
+  onRetryConnect: () => void
   onRescue: () => void
-  onModeChange: (online: boolean) => void
-  onStartLocal: (tableId: string) => void
   onStartOnline: (tableId: string) => void
   onCancelMatch: () => void
   onProfileChange: (profile: Profile) => void
@@ -619,8 +615,8 @@ function Lobby(props: {
 }) {
   const {
     profile, balance, onClaim, claimed, online, matching, matchCount, rescued, onRescue,
-    syncing, lobbyLatency,
-    onModeChange, onStartLocal, onStartOnline, onCancelMatch, onProfileChange, onClose,
+    syncing, lobbyLatency, onRetryConnect,
+    onStartOnline, onCancelMatch, onProfileChange, onClose,
   } = props
   const rank = rankForBalance(balance)
   const minBalance = Math.min(...CONFIG.tables.map((t) => t.minBalance))
@@ -704,11 +700,11 @@ function Lobby(props: {
           createElement('div', { className: 'ddz-balance-copy' },
             createElement('div', { className: 'ddz-balance-label' }, 'Token 余额' + (online ? '（在线）' : '')),
             createElement('div', { className: 'ddz-balance-value' }, balance.toLocaleString()),
-            online && syncing && createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } }, '同步中…'),
+            syncing && createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } }, '同步中…'),
           ),
           createElement('button', {
             className: 'ddz-btn ddz-balance-btn',
-            disabled: claimed,
+            disabled: claimed || !online,
             onClick: onClaim,
           }, claimed ? '今日已领' : `签到 +${CONFIG.dailyTokens.toLocaleString()}`),
         ),
@@ -718,23 +714,27 @@ function Lobby(props: {
             : createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onRescue },
                 `领救济金 +${CONFIG.rescueTokens.toLocaleString()}`),
         ),
-      ),
-      createElement('div', { className: 'ddz-mode-switch', role: 'group', 'aria-label': '对局模式' },
-        createElement('button', { type: 'button', className: 'ddz-mode-btn' + (online ? '' : ' on'), onClick: () => onModeChange(false) }, '本地练习'),
-        createElement('button', { type: 'button', className: 'ddz-mode-btn' + (online ? ' on' : ''), onClick: () => onModeChange(true) }, '在线对战'),
-      ),
-      online && createElement('div', { className: 'ddz-lobby-latency' + lobbyLatencyClass, role: 'status', title: '到在线服务器的网络延迟' },
-        createElement('span', { className: 'ddz-latency-dot' }),
-        createElement('span', null, '网络延迟 '),
-        lobbyLatency === null
-          ? createElement('span', null, '—')
-          : createElement('b', null, `${lobbyLatency}ms`),
+        !online && createElement('div', { className: 'ddz-lobby-connect' },
+          syncing
+            ? createElement('span', { className: 'ddz-dim' }, '正在连接在线对战…')
+            : createElement(Fragment, null,
+                createElement('span', { className: 'ddz-dim' }, '在线连接失败，无法对战'),
+                createElement('button', { className: 'ddz-btn ddz-btn-ghost', style: { marginLeft: 8, padding: '6px 12px' }, onClick: onRetryConnect }, '重试'),
+              ),
+        ),
+        online && createElement('div', { className: 'ddz-lobby-latency' + lobbyLatencyClass, role: 'status', title: '到在线服务器的网络延迟' },
+          createElement('span', { className: 'ddz-latency-dot' }),
+          createElement('span', null, '网络延迟 '),
+          lobbyLatency === null
+            ? createElement('span', null, '—')
+            : createElement('b', null, `${lobbyLatency}ms`),
+        ),
       ),
     ),
     createElement('div', { className: 'ddz-lobby-intro' },
       createElement('div', { className: 'ddz-section-title' }, '选择桌别'),
       createElement('div', { className: 'ddz-dim ddz-lobby-subtitle' },
-        online ? '在线匹配 3 名真人玩家（Cloudflare 云端对局）' : '开局自动匹配 2 个本地机器人（M1 本地演示）'),
+        '在线匹配 3 名真人玩家；15 秒凑不齐则补入机器人对局'),
     ),
     createElement('div', { className: 'ddz-table-grid' },
       ...CONFIG.tables.map((t) =>
@@ -757,214 +757,18 @@ function Lobby(props: {
             `匹配中… ${matchCount}/3（点击取消）`)
         : createElement('button', {
             className: 'ddz-btn',
-            // 在线看「桌别余额门槛」，本地看「底注」
-            disabled: balance < (online
-              ? (tableById(tableId)?.minBalance ?? 0)
-              : (tableById(tableId)?.base ?? 0)),
-            onClick: () => (online ? onStartOnline(tableId) : onStartLocal(tableId)),
-          }, online ? '开始匹配' : '开始本地对局'),
+            disabled: !online || balance < (tableById(tableId)?.minBalance ?? 0),
+            onClick: () => onStartOnline(tableId),
+          }, '开始匹配'),
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onClose }, '最小化'),
     ),
-    balance < (online ? (tableById(tableId)?.minBalance ?? 0) : (tableById(tableId)?.base ?? 0)) &&
+    balance < (tableById(tableId)?.minBalance ?? 0) &&
       createElement('div', { className: 'ddz-dim ddz-helper' },
-        online ? '余额不足该桌门槛，先签到或领救济金' : '余额不足该桌底注，先签到或换低倍桌'),
+        '余额不足该桌门槛，先签到或领救济金'),
     ),
     createElement('div', { className: 'ddz-lobby-version' }, `斗地主 v${APP_VERSION}`),
     createElement('div', { className: 'ddz-disclaimer' }, 'Token 为虚拟货币，仅作娱乐用途，不可兑换任何真实货币或服务（性质类似欢乐豆）'),
   )
-}
-
-/* ============================== 本地牌桌（机器人） ============================== */
-
-const HUMAN_SEAT: Seat = 0
-const CALL_ACTION_DELAY_MS = 1_200
-const CALL_ANNOUNCEMENT_MS = 1_650
-const LOCAL_SEAT_META = [
-  { nickname: '你', avatarId: 'default-01', tokenBalance: 0 },
-  { nickname: '机器人·蓝', avatarId: 'default-01', tokenBalance: 35_800_000 },
-  { nickname: '机器人·黑', avatarId: 'default-02', tokenBalance: 24_200_000 },
-]
-
-function LocalTable(props: {
-  tableId: string
-  base: number
-  profile: Profile
-  balance: number
-  onExit: () => void
-  onFinished: (deltas: [number, number, number], multiplier: number, winner: string, spring: string, landlord: Seat, rake: number) => void
-}) {
-  const { tableId, base, profile, balance, onExit, onFinished } = props
-  const [state, setState] = useState<GameState>(() => createGame())
-  const [selected, setSelected] = useState<Card[]>([])
-  const [busy, setBusy] = useState(false)
-  const randomRef = useRef(Math.random)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [callAnnouncement, setCallAnnouncement] = useState<string | null>(null)
-  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null)
-  const [clock, setClock] = useState(() => Date.now())
-
-  const seatMeta = useMemo(() => LOCAL_SEAT_META.map((m, i) => i === HUMAN_SEAT
-    ? { ...m, nickname: profile.nickname, avatarId: profile.avatarId, tokenBalance: balance }
-    : m), [profile.nickname, profile.avatarId, balance])
-  const view = useMemo(() => tableViewFromEngine(state, HUMAN_SEAT, seatMeta), [state, seatMeta])
-
-  // 出牌提示只属于当前回合，轮到下一位玩家时不能带入后续回合。
-  const previousTurnRef = useRef(`${state.phase}:${state.current}`)
-  useEffect(() => {
-    const turnKey = `${state.phase}:${state.current}`
-    if (previousTurnRef.current !== turnKey) setNotice(null)
-    previousTurnRef.current = turnKey
-  }, [state.phase, state.current])
-
-  const announceCall = (seat: Seat, call: boolean, hasCalled: boolean) => {
-    const name = seatMeta[seat]?.nickname ?? `座位${seat}`
-    const action = hasCalled ? (call ? '抢地主' : '不抢') : (call ? '叫地主' : '不叫')
-    const message = `${name}${action}`
-    setCallAnnouncement(message)
-    window.setTimeout(() => setCallAnnouncement((current) => current === message ? null : current), CALL_ANNOUNCEMENT_MS)
-  }
-
-  // 每次进入出牌阶段或轮转座位时，重置 25 秒出牌计时
-  useEffect(() => {
-    if (state.phase !== 'playing' || state.finished) {
-      setTurnStartedAt(null)
-      return
-    }
-    const startedAt = Date.now()
-    setTurnStartedAt(startedAt)
-    setClock(startedAt)
-  }, [state.phase, state.current, state.finished])
-
-  useEffect(() => {
-    if (state.phase !== 'playing' || state.finished || turnStartedAt === null) return
-    const timer = window.setInterval(() => setClock(Date.now()), 250)
-    return () => window.clearInterval(timer)
-  }, [state.phase, state.finished, turnStartedAt])
-
-  // 本地演示中超时自动处理，避免玩家一直卡住牌局
-  useEffect(() => {
-    if (state.phase !== 'playing' || state.current !== HUMAN_SEAT || state.finished || turnStartedAt === null) return
-    const timer = window.setTimeout(() => {
-      setState((s) => {
-        if (s.phase !== 'playing' || s.current !== HUMAN_SEAT || s.finished) return s
-        const move = hintPlay(s.hands[HUMAN_SEAT]!, s.lastPlay)
-        try {
-          if (move) return applyAction(s, { type: 'play', seat: HUMAN_SEAT, cards: move })
-          if (s.lastPlay !== null) return applyAction(s, { type: 'pass', seat: HUMAN_SEAT })
-        } catch { /* 状态已变化时忽略超时动作 */ }
-        return s
-      })
-      setSelected([])
-      setNotice('出牌超时，已自动处理')
-    }, Math.max(0, turnStartedAt + CONFIG.turnTimeoutMs - Date.now()))
-    return () => window.clearTimeout(timer)
-  }, [state.phase, state.current, state.finished, state.lastPlay, turnStartedAt])
-
-  // 机器人自动行动
-  useEffect(() => {
-    if (state.finished || state.redeal || state.phase === 'settled') return
-    if (state.current === HUMAN_SEAT) return
-    const timer = window.setTimeout(() => {
-      const seat = state.current
-      if (state.phase === 'calling') {
-        const hasCalled = state.landlord !== null
-        const call = botCall(state.hands[seat]!, randomRef.current)
-        announceCall(seat, call, hasCalled)
-        setState((s) => {
-          try { return applyAction(s, { type: 'call', seat, call }) } catch { return s }
-        })
-      } else {
-        const move = botMove(state.hands[seat]!, state.lastPlay)
-        setState((s) => {
-          try {
-            return move === null
-              ? applyAction(s, { type: 'pass', seat })
-              : applyAction(s, { type: 'play', seat, cards: move })
-          } catch { return s }
-        })
-      }
-    }, state.phase === 'calling' ? CALL_ACTION_DELAY_MS : 650)
-    return () => window.clearTimeout(timer)
-  }, [state])
-
-  // 结算
-  useEffect(() => {
-    if (!state.finished || !state.settlement) return
-    const t = window.setTimeout(() => {
-      const s = settle(state.landlord!, state.winner!, base, state.multiplier, CONFIG.rakeRate)
-      const winnerText = state.winner === 'landlord' ? '地主胜' : '农民胜'
-      const springText = state.spring === 'none' ? '无' : state.spring === 'landlord' ? '春天' : '反春'
-      onFinished(s.deltas, s.multiplier, winnerText, springText, state.landlord!, s.rake)
-    }, 900)
-    return () => window.clearTimeout(t)
-  }, [state.finished, state.settlement, state.winner, state.multiplier, state.spring, state.landlord, base, onFinished])
-
-  // 重新发牌（无人叫）
-  useEffect(() => {
-    if (state.redeal) {
-      const t = window.setTimeout(() => setState(createGame()), 800)
-      return () => window.clearTimeout(t)
-    }
-  }, [state.redeal])
-
-  const toggleSelect = (card: Card) => {
-    if (state.phase !== 'playing' || state.current !== HUMAN_SEAT) return
-    setSelected((prev) => {
-      const idx = prev.findIndex((x) => x.r === card.r && x.s === card.s)
-      if (idx >= 0) return prev.filter((_, i) => i !== idx)
-      return [...prev, card]
-    })
-  }
-
-  const humanAct = (action: { type: 'play'; cards: Card[] } | { type: 'pass' } | { type: 'call'; call: boolean }) => {
-    try {
-      if (action.type === 'call') {
-        announceCall(HUMAN_SEAT, action.call, state.landlord !== null)
-        setState((s) => applyAction(s, { type: 'call', seat: HUMAN_SEAT, call: action.call }))
-        setBusy(true)
-        window.setTimeout(() => setBusy(false), 300)
-      } else if (action.type === 'pass') {
-        setState((s) => applyAction(s, { type: 'pass', seat: HUMAN_SEAT }))
-        setSelected([])
-      } else {
-        setState((s) => applyAction(s, { type: 'play', seat: HUMAN_SEAT, cards: action.cards }))
-        setSelected([])
-      }
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  const doHint = () => {
-    if (state.phase !== 'playing' || state.current !== HUMAN_SEAT) return
-    const h = hintPlay(state.hands[HUMAN_SEAT]!, state.lastPlay)
-    if (!h) {
-      setNotice('没有能压过的牌，过吧')
-      return
-    }
-    setNotice(null)
-    setSelected(h)
-  }
-
-  const remainingMs = state.phase === 'playing' && turnStartedAt !== null
-    ? Math.max(0, CONFIG.turnTimeoutMs - (clock - turnStartedAt))
-    : null
-  const remainingSeconds = remainingMs === null ? null : Math.ceil(remainingMs / 1000)
-
-  return createElement(GameTableShell, {
-    view,
-    selected,
-    notice,
-    remainingSeconds,
-    onToggleCard: toggleSelect,
-    onPlay: () => humanAct({ type: 'play', cards: selected }),
-    onPass: () => humanAct({ type: 'pass' }),
-    onHint: doHint,
-    onCall: (call) => humanAct({ type: 'call', call }),
-    callAnnouncement,
-    onExit,
-    onDismissNotice: () => setNotice(null),
-  })
 }
 
 /* ============================== 在线牌桌（真人 PVP） ============================== */
@@ -1407,8 +1211,8 @@ export function DoudizhuApp() {
   const [sidebarRight, setSidebarRight] = useState(280)
   const [pipBounds, setPipBounds] = useState<PipBounds>(() => getInitialPipBounds())
   const [profile, setProfile] = useState<Profile>(() => loadProfile())
-  const [balance, setBalance] = useState(() => loadBalance())
-  const [claimed, setClaimed] = useState(() => localStorage.getItem('ddz:claim') === todayKey())
+  const [balance, setBalance] = useState(0)
+  const [claimed, setClaimed] = useState(false)
   const [screen, setScreen] = useState<'lobby' | 'table' | 'settle'>('lobby')
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
   const [result, setResult] = useState<{ myDelta: number; multiplier: number; winner: string; spring: string; rake: number } | null>(null)
@@ -1576,8 +1380,9 @@ export function DoudizhuApp() {
     }
   }
 
-  // 切换到在线模式：立即切换 UI（避免点击等网络导致卡顿），校验/同步放后台。
-  // 协议不一致 → 强制弹窗并回退本地；auth+me 同步余额/资料。
+  // 启动即连接在线（唯一模式，无本地模式）：校验/同步放后台。
+  // 协议不一致 → 强制弹窗；失败 → 大厅可重试。在线 Token 以服务端为权威，
+  // 签到状态也来自服务端（与本地/机器人完全独立）。
   const enterOnline = () => {
     setOnline(true)
     setSyncing(true)
@@ -1592,6 +1397,7 @@ export function DoudizhuApp() {
         await api.auth(profile.uid)
         const me = await api.getMe()
         setBalance(me.player.balance)
+        setClaimed(me.player.claimedToday)
         setProfile((p) => ({ ...p, nickname: me.player.nickname, avatarId: me.player.avatarId }))
       } catch (e) {
         setNotice(e instanceof Error ? e.message : '在线连接失败')
@@ -1602,44 +1408,39 @@ export function DoudizhuApp() {
     })()
   }
 
-  const leaveOnline = () => {
-    setOnline(false)
-    if (matching) cancelMatch()
-    setBalance(loadBalance())
-  }
+  // 挂载后自动连接在线
+  useEffect(() => {
+    enterOnline()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 应用级反馈气泡自动淡出（约 2.6s），无需手动点击
+  useEffect(() => {
+    if (!notice) return
+    const t = window.setTimeout(() => setNotice(null), 2600)
+    return () => window.clearTimeout(t)
+  }, [notice])
 
   const claim = async () => {
     if (claimed) return
-    if (online) {
-      try {
-        const r = await api.claimDaily()
-        setBalance(r.balance)
+    try {
+      const r = await api.claimDaily()
+      setBalance(r.balance)
+      setClaimed(true)
+      setNotice(`每日签到 +${r.amount.toLocaleString()}`)
+    } catch (e) {
+      // 已领取 → 同步服务端状态并给出明确提示（跨会话/跨设备时按钮可能重新可点）
+      if ((e instanceof Error && e.message.includes('already claimed')) || String(e).includes('409')) {
         setClaimed(true)
-        // 服务端已入账，持久化「今日已领」标记，避免刷新后误以为还能再领
-        localStorage.setItem('ddz:claim', todayKey())
-        setNotice(`每日签到 +${r.amount.toLocaleString()}`)
-      } catch (e) {
-        // 已领取 → 同步服务端状态并给出明确提示（跨会话/跨设备时按钮可能重新可点）
-        if ((e instanceof Error && e.message.includes('already claimed')) || String(e).includes('409')) {
-          setClaimed(true)
-          localStorage.setItem('ddz:claim', todayKey())
-          try {
-            const me = await api.getMe()
-            setBalance(me.player.balance)
-          } catch { /* ignore */ }
-          setNotice('今天已经签到过了，明天再来吧')
-        } else {
-          setNotice(e instanceof Error ? e.message : '签到失败')
-        }
+        try {
+          const me = await api.getMe()
+          setBalance(me.player.balance)
+        } catch { /* ignore */ }
+        setNotice('今天已经签到过了，明天再来吧')
+      } else {
+        setNotice(e instanceof Error ? e.message : '签到失败')
       }
-      return
     }
-    const next = balance + CONFIG.dailyTokens
-    setBalance(next)
-    saveBalance(next)
-    localStorage.setItem('ddz:claim', todayKey())
-    setClaimed(true)
-    setNotice(`每日签到 +${CONFIG.dailyTokens.toLocaleString()}`)
   }
 
   const rescue = async () => {
@@ -1657,12 +1458,6 @@ export function DoudizhuApp() {
         setNotice(msg || '领取失败')
       }
     }
-  }
-
-  const startLocal = (tid: string) => {
-    setTableId(tid)
-    setResult(null)
-    setScreen('table')
   }
 
   const startOnline = async (tid: string) => {
@@ -1724,16 +1519,6 @@ export function DoudizhuApp() {
     }
   }
 
-  const onFinishedLocal = useCallback((
-    deltas: [number, number, number], multiplier: number, winner: string, spring: string, _landlord: Seat, rake: number,
-  ) => {
-    setResult({ myDelta: deltas[HUMAN_SEAT], multiplier, winner, spring, rake })
-    const next = Math.max(0, balance + deltas[HUMAN_SEAT])
-    setBalance(next)
-    saveBalance(next)
-    setScreen('settle')
-  }, [balance])
-
   const onSettledOnline = useCallback((
     myDelta: number, balanceAfter: number, winner: string, spring: string, multiplier: number, rake: number,
   ) => {
@@ -1767,19 +1552,13 @@ export function DoudizhuApp() {
       profile, balance, claimed, online, matching, matchCount, rescued, syncing, lobbyLatency: lobbyLatencyMs,
       onClaim: claim,
       onRescue: rescue,
-      onModeChange: (nextOnline) => { if (nextOnline === online) return; if (nextOnline) enterOnline(); else leaveOnline() },
-      onStartLocal: startLocal,
+      onRetryConnect: enterOnline,
       onStartOnline: startOnline,
       onCancelMatch: cancelMatch,
       onProfileChange: updateProfile,
       onClose: closeSurface,
     }),
-    screen === 'table' && (online && roomId
-      ? createElement(OnlineTable, { roomId, tableId, profile, onExit: exitTable, onSettled: onSettledOnline })
-      : createElement(LocalTable, {
-          tableId, base: tableById(tableId)?.base ?? 0, profile, balance,
-          onExit: exitTable, onFinished: onFinishedLocal,
-        })),
+    screen === 'table' && roomId && createElement(OnlineTable, { roomId, tableId, profile, onExit: exitTable, onSettled: onSettledOnline }),
     screen === 'settle' && result && createElement(Settle, {
       result, balance, onExit: () => setScreen('lobby'),
     }),

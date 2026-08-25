@@ -4,12 +4,12 @@
 
 一个运行在 **DeepSeek Harness Web GUI**（`http://127.0.0.1:3080`）里的斗地主插件。
 
-- **M1**：3 人标准斗地主本地闭环 · **玩家 vs 机器人 ×2**，本地规则引擎与 localStorage 模拟 Token/资料。
-- **M2（当前）**：3 人真人 **PVP**，由 Cloudflare 负责匹配、实时同步与服务端经济记账。
+- **M1**：3 人标准斗地主本地闭环 · **玩家 vs 机器人 ×2**（已并入在线机器人补位）。
+- **M2（当前）**：3 人 **PVP**（真人不足 15s 自动补机器人），由 Cloudflare 负责匹配、实时同步与服务端经济记账。
 - **M3（后续）**：引入 **DSH Agent** —— 用自己的 DSH 或别人的 DSH 当牌友/对手（人机混桌、全 AI 观战对局）。
 
-> **状态：M1 完成；M2 后端（Cloudflare Workers/Room DO/D1）已开发、部署并通过本地+线上 e2e，客户端在线模式（签到/匹配/WS 真人 PVP）已接入，待重启 GUI 实机复测。**
-> 已包含 React/TypeScript 插件入口、浅色大厅/牌桌 UI、本地/在线双模式、Token/签到、默认头像选择、昵称编辑、规则引擎与单机/真人 PVP 对局。
+> **状态：在线 PVP 已上线——Cloudflare 后端（Workers/Room DO/D1）已部署，客户端为在线唯一模式（真人不足 15s 自动补机器人），Token 以服务端为权威，签到/匹配/WS 对局/经济闭环可用。**
+> 已包含 React/TypeScript 插件入口、浅色大厅/牌桌 UI、在线 PVP + 机器人补位、Token/签到、默认头像选择、昵称编辑与规则引擎。
 
 ## 快速导航
 
@@ -75,7 +75,7 @@ dsh plugin --profile web add -w github:AwesomeHou/dsh-doudizhu
 
 > 说明：
 > - 插件的在线对战依赖部署在 Cloudflare 的后端（客户端内置默认 API 地址），无需使用者自建后端。
-> - 本地机器人对局完全离线可用（M1 模式）。
+> - 在线对局真人凑不齐时由机器人补位（15s），全程走云端；无本地离线对局。
 > - 安装即把插件加入 profile 的 bundle 栈（`cordis.patch.yml`），卸载用 `dsh plugin --profile web remove dsh-doudizhu`。
 > - 若安装报 `git-hosted plugins build on install via their prepare script ... allowBuilds` 的提示：那是 DSH 对 git 安装失败的**通用诊断**。本插件**没有 prepare/install 构建脚本**（`lib/` 预构建随包分发），pnpm 不会对它做构建拦截，因此无需添加 allowBuilds 条目；只要 pnpm 可用、重跑命令即可成功。
 

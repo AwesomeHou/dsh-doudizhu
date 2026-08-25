@@ -28,13 +28,13 @@ const BOT_NAMES = [
   '南巷清风', '北城旧梦', '山有木兮', '灯火阑珊', '云开月明', '拾壹月', '风起长林', '悠然自得',
 ] as const
 
-function botEntry(): QueueEntry {
+function botEntry(aroundBalance: number): QueueEntry {
   return {
     uid: 'bot:' + crypto.randomUUID(),
     nickname: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)]!,
     avatarId: Math.random() < 0.5 ? 'default-01' : 'default-02',
-    // 固定大余额：模拟长期玩牌攒下家底的真人，避免被当作新手
-    tokenBalance: 8_000_000 + Math.floor(Math.random() * 12_000_000),
+    // 机器人 Token 与真人平均余额接近（±20%），避免“机器人富得离谱”穿帮
+    tokenBalance: Math.round(Math.max(1, aroundBalance) * (0.8 + Math.random() * 0.4)),
     joinedAt: Date.now(),
   }
 }
@@ -122,7 +122,12 @@ export class Queue {
     if (queue.length < 3 && !waited) return null
     const trio = queue.slice(0, 3)
     const rest = queue.slice(3)
-    while (trio.length < 3) trio.push(botEntry())
+    // 机器人余额以本桌真人平均余额为基准，尽量贴近玩家（避免相差太远穿帮）
+    const realPlayers = trio.filter((e) => !e.uid.startsWith('bot:'))
+    const avgRealBalance = realPlayers.length > 0
+      ? realPlayers.reduce((sum, e) => sum + e.tokenBalance, 0) / realPlayers.length
+      : 0
+    while (trio.length < 3) trio.push(botEntry(avgRealBalance))
     const tableId = this.tableId
     const roomId = crypto.randomUUID()
     const roomMeta: RoomMeta = {

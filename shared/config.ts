@@ -11,6 +11,7 @@ export interface TableConfig {
 export interface RankConfig {
   id: number
   name: string
+  /** 段位门槛（Token 总余额下限） */
   min: number
 }
 
@@ -29,7 +30,7 @@ export const CONFIG = {
     { id: 'advanced', label: '进阶桌', base: 50_000, minBalance: 1_000_000 },
     { id: 'high', label: '高倍桌', base: 200_000, minBalance: 4_000_000 },
   ] as TableConfig[],
-  /** 段位（按 Token 总余额） */
+  /** 段位（按 Token 当前余额实时划分：达标即升，输钱即降） */
   ranks: [
     { id: 1, name: '小难梁', min: 0 },
     { id: 2, name: '牢梁', min: 500_000 },

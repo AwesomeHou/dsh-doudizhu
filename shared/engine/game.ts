@@ -64,14 +64,10 @@ export function roleOf(state: GameState, seat: Seat): Role {
 
 export function createGame(rng: () => number = Math.random): GameState {
   const { hands, bottom } = deal(rng)
-  // 随机叫地主顺序
-  const order: Seat[] = [0, 1, 2]
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-    const tmp = order[i]!
-    order[i] = order[j]!
-    order[j] = tmp
-  }
+  // 叫地主按逆时针轮转：从随机起始座位开始，依次为下家 (start+1)%3、再下家 (start+2)%3，
+  // 与出牌阶段的方向（逆时针）一致。旧实现是完全随机排列，导致叫牌阶段看不出方向。
+  const start = Math.floor(rng() * 3) as Seat
+  const order: Seat[] = [start, ((start + 1) % 3) as Seat, ((start + 2) % 3) as Seat]
   return {
     phase: 'calling',
     hands,

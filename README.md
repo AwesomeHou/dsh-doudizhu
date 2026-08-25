@@ -11,6 +11,14 @@
 > **状态：在线 PVP 已上线——Cloudflare 后端（Workers/Room DO/D1）已部署，客户端为在线唯一模式（真人不足 15s 自动补机器人），Token 以服务端为权威，签到/匹配/WS 对局/经济闭环可用。**
 > 已包含 React/TypeScript 插件入口、浅色大厅/牌桌 UI、在线 PVP + 机器人补位、Token/签到、默认头像选择、昵称编辑与规则引擎。
 
+## 截图预览
+
+| 游戏大厅 | 对局牌桌 |
+|---|---|
+| ![游戏大厅](docs/screenshots/screenshot1.png) | ![对局牌桌](docs/screenshots/screenshot2.png) |
+
+> 截图存放于 `docs/screenshots/`，重新发版时随仓库更新。
+
 ## 快速导航
 
 | 文档 | 说明 |
@@ -27,7 +35,7 @@
 
 ```
 dsh-doudizhu/
-├── docs/            # 需求、策划、架构、路线图、埋点
+├── docs/            # 需求、策划、架构、路线图、埋点、截图（screenshots/）
 ├── src/             # DSH 插件入口与 React 客户端 UI
 ├── worker/          # Cloudflare 后端（Workers + Durable Objects + D1，规划中）
 ├── shared/          # 客户端与服务端共享的规则引擎、配置与协议

@@ -16,6 +16,7 @@ import { deepseekBlueUrl, deepseekBlackUrl } from './brandAssets.ts'
 import { PROTOCOL_VERSION, APP_VERSION } from '../../shared/protocol.ts'
 import * as api from './api.ts'
 import { tableViewFromProtocol, type TableView, type SeatView } from './table-view.ts'
+import { inferAction, snapshotOf, type StateSnapshot } from './action-feedback.ts'
 
 /* ============================== 样式 ============================== */
 
@@ -34,6 +35,12 @@ const STYLE = `
  .ddz-sidebar-entry:hover{background:#f8f9ff;border-color:#cbd3ea;box-shadow:0 2px 6px rgba(26,32,47,.08)}
  .ddz-sidebar-entry-host.is-active .ddz-sidebar-entry{background:#eef0f3;border-color:#d7dbe3;box-shadow:inset 0 0 0 1px #e2e5ea}
  body[data-dsh-doudizhu-standalone="true"] [role="treeitem"][aria-selected="true"]:not(:hover){background-color:transparent!important;box-shadow:none!important}
+ /* 宿主系统级模态（如设置）打开时，斗地主所有浮层下沉到宿主遮罩（z-index:1000）之下，
+    入口与侧栏其它按钮一致地变暗且不可点击，避免“依然亮着”盖在设置面板上 */
+ .ddz-root[data-host-modal="true"] .ddz-sidebar-entry-host{ z-index:900 }
+ .ddz-root[data-host-modal="true"] .ddz-standalone-surface{ z-index:900 }
+ .ddz-root[data-host-modal="true"] .ddz-pip-window{ z-index:900 }
+ .ddz-root[data-host-modal="true"] .ddz-sidebar-entry{opacity:.45;pointer-events:none;cursor:not-allowed;box-shadow:none}
  .ddz-sidebar-entry:active{background:#f1f3ff}
  .ddz-sidebar-entry:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
  .ddz-sidebar-entry-icon{width:24px;height:24px;display:grid;place-items:center;flex:0 0 24px;border-radius:7px;background:#eef1ff;color:#304bc5;font-size:15px}
@@ -55,6 +62,11 @@ const STYLE = `
  .ddz-pip-toolbar-btn{appearance:none;border:0;border-radius:7px;background:transparent;color:var(--dz-dim);padding:6px 8px;font:inherit;font-size:12px;cursor:pointer}
  .ddz-pip-toolbar-btn:hover{background:#f2f4f8;color:var(--dz-text)}
  .ddz-pip-toolbar-btn:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
+ /* 小窗自适应：内容画布按窗口可用区域等比缩放，不出现滑块；工具栏保持自然尺寸 */
+ .ddz-pip-canvas{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--dz-surface)}
+ .ddz-pip-scale{position:absolute;top:0;left:0;transform-origin:0 0;width:100%;min-width:max-content;min-height:100%;height:auto;display:flex;flex-direction:column}
+ .ddz-pip-window .ddz-body{scrollbar-width:none;-ms-overflow-style:none}
+ .ddz-pip-window .ddz-body::-webkit-scrollbar{display:none}
  .ddz-pip-resize-handle{position:absolute;z-index:4;touch-action:none}
  .ddz-pip-resize-handle.is-n,.ddz-pip-resize-handle.is-s{left:12px;right:12px;height:8px;cursor:ns-resize}
  .ddz-pip-resize-handle.is-n{top:0}
@@ -78,6 +90,9 @@ const STYLE = `
 .ddz-row{display:flex;gap:10px;align-items:center}
 .ddz-dim{color:var(--dz-dim)}
 .ddz-rank{display:inline-block;background:#e9edff;color:#304bc5;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700}
+button.ddz-rank{border:0;cursor:pointer;font-family:inherit;line-height:18px}
+button.ddz-rank:hover{background:#dde3ff}
+button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-offset:2px}
 .ddz-card{position:relative;width:44px;height:64px;border-radius:7px;background:#fff;color:#20242c;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;cursor:pointer;user-select:none;border:1px solid #d9dde5;box-shadow:0 1px 3px rgba(26,32,47,.12);transition:transform .14s ease,box-shadow .14s ease}
 .ddz-card:hover{transform:translateY(-2px);box-shadow:0 4px 9px rgba(26,32,47,.14)}
 .ddz-card.red{color:var(--dz-red)}
@@ -187,6 +202,10 @@ const STYLE = `
 .ddz-action-bubble{position:absolute;left:50%;bottom:calc(100% + 10px);z-index:3;transform:translateX(-50%);padding:8px 12px;border:1px solid var(--dz-blue);border-radius:10px;background:#fff;color:var(--dz-text);box-shadow:0 8px 12px rgba(26,32,47,.14);font-size:13px;line-height:18px;white-space:nowrap;animation:ddz-toast-in .22s cubic-bezier(.22,1,.36,1) both}
 .ddz-action-bubble::after{content:'';position:absolute;left:50%;bottom:-6px;width:10px;height:10px;background:#fff;border-right:1px solid var(--dz-blue);border-bottom:1px solid var(--dz-blue);transform:translateX(-50%) rotate(45deg)}
 .ddz-action-countdown{min-width:34px;justify-content:center;align-self:center}
+/* 角色行动反馈（叫地主/抢地主/不抢/过）：以直接文本形式出现在出牌区内，与出牌同性质；
+   叫/抢 使用主色高权重，放弃/过 使用次级灰色，与出牌区内其它文本形成层级关系 */
+.ddz-play-area-action{position:absolute;left:50%;top:50%;z-index:3;transform:translate(-50%,-50%);font-size:22px;font-weight:800;letter-spacing:.04em;color:#304bc5;line-height:1.2;white-space:nowrap;pointer-events:none;animation:ddz-action-text-in .3s cubic-bezier(.22,1,.36,1) both;text-shadow:0 1px 0 #fff,0 2px 6px rgba(26,32,47,.12)}
+.ddz-play-area-action.is-pass{color:var(--dz-dim);font-size:18px;font-weight:700}
 .ddz-human-hand-row{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:16px;width:100%;min-width:0}
 .ddz-human-area .ddz-human-hand-row{order:3}
 .ddz-human-hand{width:100%;min-width:0;flex:none;justify-content:center}
@@ -231,9 +250,17 @@ const STYLE = `
 .ddz-dialog-title{font-size:17px;font-weight:800;margin:0 0 10px}
 .ddz-dialog-body{font-size:13px;line-height:1.7;color:var(--dz-dim);margin-bottom:16px}
 .ddz-dialog-code{display:block;background:#f2f4f8;border:1px solid var(--dz-line);border-radius:8px;padding:8px 10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dz-text);margin:8px 0 2px;word-break:break-all}
+.ddz-rank-table{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+.ddz-rank-row{display:flex;flex-direction:column;gap:3px;padding:9px 12px;border:1px solid var(--dz-line);border-radius:10px;background:#fbfcff}
+.ddz-rank-row.is-current{border-color:var(--dz-blue);box-shadow:0 0 0 1px var(--dz-blue);background:#f5f7ff}
+.ddz-rank-row-top{display:flex;align-items:center;gap:8px}
+.ddz-rank-row-name{font-size:13px;font-weight:750;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.ddz-rank-row-current{font-size:10px;font-weight:700;color:#fff;background:var(--dz-blue);border-radius:999px;padding:1px 6px}
+.ddz-rank-row-range{margin-left:auto;font-size:11px;color:var(--dz-dim);font-variant-numeric:tabular-nums;white-space:nowrap}
  @keyframes ddz-overlay-in{from{opacity:0}to{opacity:1}}
  @keyframes ddz-modal-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes ddz-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes ddz-action-text-in{from{opacity:0;transform:translate(-50%,calc(-50% + 8px)) scale(.9)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 /* 反馈气泡生命周期：快速进入 → 停留 → 末尾淡出（2.6s 后由 JS 移除 DOM） */
 @keyframes ddz-toast-life{0%{opacity:0;transform:translate(-50%,-6px)}8%{opacity:1;transform:translate(-50%,0)}82%{opacity:1}100%{opacity:0}}
 @keyframes ddz-picker-in{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
@@ -336,15 +363,25 @@ function RoleBadge({ role }: { role: Role }) {
   }, landlord ? '地主' : '农民')
 }
 
-function PlayedArea({ seat, cards, countdownSeconds = null }: { seat: Seat; cards: Card[] | null; countdownSeconds?: number | null }) {
+function PlayedArea({ seat, humanSeat = 0, cards, countdownSeconds = null, action = null }: { seat: Seat; humanSeat?: Seat; cards: Card[] | null; countdownSeconds?: number | null; action?: { text: string; id: number } | null }) {
   const cardKey = cards?.map((card) => `${card.r}-${card.s}`).join('|') ?? 'empty'
   const play = cards ? classify(cards) : null
   const isSpecialPlay = play !== null && !['single', 'pair', 'triple'].includes(play.kind)
   const specialClass = isSpecialPlay && play ? ` ddz-special-play ddz-special-${play.kind}` : ''
+  // 行动反馈文本的层级：叫/抢 用主色高权重，放弃/过 用次级灰
+  const actionClass = action
+    ? (action.text === '叫地主' || action.text === '抢地主' ? '' : ' is-pass')
+    : ''
   return createElement('div', {
     className: 'ddz-play-area',
-    'aria-label': `${seatLabel(seat, 0)}出牌区${play ? `，${KIND_NAMES[play.kind]}` : ''}`,
+    'aria-label': `${seatLabel(seat, humanSeat)}出牌区${play ? `，${KIND_NAMES[play.kind]}` : ''}`,
   },
+  action && createElement('div', {
+    key: action.id,
+    className: 'ddz-play-area-action' + actionClass,
+    role: 'status',
+    'aria-live': 'polite',
+  }, action.text),
   countdownSeconds !== null && createElement('span', {
     className: 'ddz-countdown ddz-play-area-countdown' + (countdownSeconds <= 3 ? ' urgent' : ''),
     'aria-live': 'polite',
@@ -367,7 +404,8 @@ function PlayedArea({ seat, cards, countdownSeconds = null }: { seat: Seat; card
 
 function seatLabel(seat: Seat, humanSeat: Seat): string {
   if (seat === humanSeat) return '你'
-  return ['下家', '上家'][seat < humanSeat ? 0 : 1] ?? '对手'
+  // 逆时针出牌：下家（下一手行动者）=(humanSeat+1)%3，上家（上一手行动者）=(humanSeat+2)%3
+  return seat === ((humanSeat + 1) % 3) as Seat ? '下家' : '上家'
 }
 
 /* ============================== 牌桌外壳（本地/线上共用） ============================== */
@@ -391,22 +429,121 @@ function GameTableShell(props: {
   const { view, selected, notice, remainingSeconds, onToggleCard, onPlay, onPass, onHint, onCall, callAnnouncement, onExit, onDismissNotice } = props
   const [playedBySeat, setPlayedBySeat] = useState<PlayedBySeat>(() => [null, null, null])
 
-  // 每位玩家保留本轮最近一次出的牌
-  useEffect(() => {
-    if (view.lastPlayCards === null || view.lastPlayCards.length === 0) {
-      if (view.lastActor !== null && view.phase === 'playing') setPlayedBySeat([null, null, null])
-      return
-    }
-    if (view.lastActor === null) return
-    const actor = view.lastActor
-    const cards = view.lastPlayCards
+  // —— 角色行动反馈（叫地主/抢地主/不抢/过）：以文本形式显示在各自出牌区内，与出牌同性质 ——
+  // 本地不直接从协议拿到“谁刚做了什么”，靠服务端状态推进（callActor/callMultiplier/
+  // current/lastActor 的 diff）推断，并写入各出牌区。
+  // 行动文本与出牌一样持久显示（不自动消失）：轮到某座位时清空该座位出牌框（“过”轮到自己才消失），
+  // 出牌阶段首次落牌时清空叫牌遗留文本，新一轮叫牌开始（重开）时清空上一轮文本。
+  const [actionText, setActionText] = useState<Record<Seat, string | null>>({} as Record<Seat, string | null>)
+  const actionKeyRef = useRef<Record<number, number>>({})
+  const lastShownRef = useRef<Record<number, { text: string; at: number }>>({})
+  const prevSnapshotRef = useRef<StateSnapshot | null>(null)
+  const callingClearedRef = useRef(false)
+
+  const showAction = useCallback((seat: Seat, text: string) => {
+    const now = Date.now()
+    const last = lastShownRef.current[seat]
+    // 乐观反馈与服务端回包重复展示时去重（同座同文案 800ms 内只更新一次）
+    if (last && last.text === text && now - last.at < 800) return
+    lastShownRef.current[seat] = { text, at: now }
+    actionKeyRef.current[seat] = now + Math.random()
+    setActionText((prev) => (prev[seat] === text ? prev : { ...prev, [seat]: text }))
+  }, [])
+
+  // 清空某座位的出牌框（过牌时让“过”独占出牌框，与出牌同性质）
+  const clearSeatCards = useCallback((seat: Seat) => {
     setPlayedBySeat((prev) => {
-      if (prev[actor] === cards) return prev
+      if (prev[seat] === null) return prev
       const next = [...prev] as PlayedBySeat
-      next[actor] = cards
+      next[seat] = null
       return next
     })
-  }, [view.phase, view.lastActor, view.lastPlayCards])
+  }, [])
+
+  // 通过服务端状态推进推断各座位行动（推断逻辑在 action-feedback.ts 中单测覆盖）
+  useEffect(() => {
+    const prev = prevSnapshotRef.current
+    if (prev) {
+      const fx = inferAction(prev, view)
+      if (fx) {
+        showAction(fx.seat, fx.text)
+        // 过牌与出牌同性质：清空该座位之前的出牌，让“过”独占出牌框
+        if (fx.text === '过') clearSeatCards(fx.seat)
+      }
+    }
+    prevSnapshotRef.current = snapshotOf(view)
+  }, [view, showAction, clearSeatCards])
+
+  // 轮到某座位 → 清空该座位出牌框里的行动文本（“过”轮到自己时消失）。
+  // 只在出牌阶段首手落牌后（callingClearedRef=true）生效，避免误清叫牌阶段最后一条“叫/抢”文本。
+  useEffect(() => {
+    if (view.phase !== 'playing' || !callingClearedRef.current) return
+    const seat = view.current
+    setActionText((prev) => (prev[seat] == null ? prev : { ...prev, [seat]: null }))
+  }, [view.phase, view.current])
+
+  // 出牌阶段首次落牌 → 清空叫牌阶段遗留的行动文本（不误伤后续的“过”）
+  useEffect(() => {
+    if (view.phase === 'playing') {
+      if (!callingClearedRef.current && view.lastPlayCards !== null && view.lastPlayCards.length > 0) {
+        callingClearedRef.current = true
+        setActionText({} as Record<Seat, string | null>)
+      }
+    } else {
+      callingClearedRef.current = false
+    }
+  }, [view.phase, view.lastPlayCards])
+
+  // 新一轮叫牌开始（callActor 回到 0，含无人叫重开）→ 清空上一轮遗留的行动文本
+  useEffect(() => {
+    if (view.phase === 'calling' && view.callActor === 0) {
+      setActionText({} as Record<Seat, string | null>)
+    }
+  }, [view.phase, view.callActor])
+
+  // —— 手牌拖拽连续选择（按住鼠标划过手牌拉起候选）——
+  const dragRef = useRef(false)
+  const suppressClickRef = useRef(false)
+  useEffect(() => {
+    const endDrag = () => {
+      // 延迟到 click 事件之后复位，避免 pointerdown 已切换选择后 click 再切一次
+      window.setTimeout(() => {
+        dragRef.current = false
+        suppressClickRef.current = false
+      }, 0)
+    }
+    window.addEventListener('pointerup', endDrag)
+    window.addEventListener('pointercancel', endDrag)
+    window.addEventListener('blur', endDrag)
+    return () => {
+      window.removeEventListener('pointerup', endDrag)
+      window.removeEventListener('pointercancel', endDrag)
+      window.removeEventListener('blur', endDrag)
+    }
+  }, [])
+
+  // 每位玩家保留本轮最近一次出的牌；轮到自己时清空自己的出牌框
+  useEffect(() => {
+    setPlayedBySeat((prev) => {
+      const next = [...prev] as PlayedBySeat
+      let changed = false
+      // 轮到自己 → 清空自己的出牌框（出牌阶段）
+      if (view.phase === 'playing' && view.current === view.mySeat && next[view.mySeat] !== null) {
+        next[view.mySeat] = null
+        changed = true
+      }
+      // 刚出的牌 → 更新到对应座位
+      if (view.lastPlayCards !== null && view.lastPlayCards.length > 0 && view.lastActor !== null) {
+        const actor = view.lastActor
+        const cards = view.lastPlayCards
+        if (next[actor] !== cards) {
+          next[actor] = cards
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [view.phase, view.current, view.mySeat, view.lastActor, view.lastPlayCards])
 
   // 反馈气泡自动淡出（约 2.6s），无需手动点击；用 ref 避免依赖回调身份
   const dismissNoticeRef = useRef(onDismissNotice)
@@ -420,8 +557,13 @@ function GameTableShell(props: {
   const sortedHand = useMemo(() => sortHand(view.myHand), [view.myHand])
   const humanView = view.seats.find((s) => s.isHuman) ?? view.seats[view.mySeat]
   const otherSeats = view.seats.filter((s) => !s.isHuman)
-  const botA = otherSeats[0]
-  const botB = otherSeats[1]
+  // 逆时针出牌顺序：下家（下一手行动者）显示在右侧，上家（上一手行动者）显示在左侧。
+  // 座位号本身没有物理位置含义（由匹配顺序决定），这里按“座位号+1=下一手”映射到屏幕左右，
+  // 保证任何座位号下，右侧都是下家、左侧都是上家。
+  const nextSeat = ((view.mySeat + 1) % 3) as Seat
+  const prevSeat = ((view.mySeat + 2) % 3) as Seat
+  const botA = otherSeats.find((s) => s.seat === prevSeat) ?? otherSeats[0] // 上家 → 左侧
+  const botB = otherSeats.find((s) => s.seat === nextSeat) ?? otherSeats[1] // 下家 → 右侧
   const isMyTurn = view.phase !== 'settled' && !view.finished && view.current === view.mySeat
   const lastPlay = view.lastPlayCards && view.lastPlayCards.length > 0 ? classify(view.lastPlayCards) : null
   const canPass = view.phase === 'playing' && lastPlay !== null
@@ -434,6 +576,11 @@ function GameTableShell(props: {
   }
   const showCountdown = remainingSeconds !== null && remainingSeconds > 0
   const callLabel = view.hasCalled ? '抢地主' : '叫地主'
+  // 座位 → 行动文本（带动画 key，保证同文案二次出现时重新播放入场动画）
+  const actionFor = (seat: Seat): { text: string; id: number } | null => {
+    const text = actionText[seat]
+    return text ? { text, id: actionKeyRef.current[seat] ?? 0 } : null
+  }
 
   return createElement('div', { className: 'ddz-body ddz-table-screen' },
     createElement('button', { className: 'ddz-table-exit', onClick: onExit }, '← 退出牌桌'),
@@ -464,8 +611,10 @@ function GameTableShell(props: {
           botA && createElement(SeatPanel, { view, seatView: botA, isTurn: view.current === botA.seat }),
           botA && createElement(PlayedArea, {
             seat: botA.seat,
+            humanSeat: view.mySeat,
             cards: playedBySeat[botA.seat],
             countdownSeconds: view.current === botA.seat && showCountdown ? remainingSeconds : null,
+            action: actionFor(botA.seat),
           }),
         ),
         createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
@@ -479,15 +628,17 @@ function GameTableShell(props: {
         createElement('div', { className: 'ddz-side-zone right' },
           botB && createElement(PlayedArea, {
             seat: botB.seat,
+            humanSeat: view.mySeat,
             cards: playedBySeat[botB.seat],
             countdownSeconds: view.current === botB.seat && showCountdown ? remainingSeconds : null,
+            action: actionFor(botB.seat),
           }),
           botB && createElement(SeatPanel, { view, seatView: botB, isTurn: view.current === botB.seat }),
         ),
       ),
       // 我的手牌与操作
       createElement('div', { className: 'ddz-human-area', style: { textAlign: 'center' } },
-        createElement(PlayedArea, { seat: view.mySeat, cards: playedBySeat[view.mySeat] }),
+        createElement(PlayedArea, { seat: view.mySeat, humanSeat: view.mySeat, cards: playedBySeat[view.mySeat], action: actionFor(view.mySeat) }),
         createElement('div', { className: 'ddz-human-hand-row' },
           humanView && createElement(SeatPanel, { view, seatView: humanView, isTurn: isMyTurn }),
           createElement('div', { className: 'ddz-row ddz-hand ddz-folded-cards ddz-human-hand', style: { flexWrap: 'nowrap', gap: 0, paddingBottom: 4 } },
@@ -496,10 +647,25 @@ function GameTableShell(props: {
                 key: `${c.r}-${c.s}-${i}`,
                 className: 'ddz-hand-card ddz-card-stack-item',
                 style: { '--ddz-delay': `${Math.min(i, 12) * 35}ms` },
+                onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
+                  if (event.button !== 0) return
+                  dragRef.current = true
+                  suppressClickRef.current = true
+                  onToggleCard(c)
+                },
+                onPointerEnter: () => {
+                  if (dragRef.current) onToggleCard(c)
+                },
               }, createElement(CardView, {
                 card: c,
                 selected: selected.some((x) => x.r === c.r && x.s === c.s),
-                onClick: () => onToggleCard(c),
+                onClick: () => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false
+                    return
+                  }
+                  onToggleCard(c)
+                },
               })),
             ),
           ),
@@ -508,8 +674,8 @@ function GameTableShell(props: {
           view.phase === 'calling'
             ? (isMyTurn
                 ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
-                    createElement('button', { className: 'ddz-btn', onClick: () => onCall(true) }, callLabel),
-                    createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => onCall(false) }, view.hasCalled ? '不抢' : '不叫'),
+                    createElement('button', { className: 'ddz-btn', onClick: () => { onCall(true); showAction(view.mySeat, view.hasCalled ? '抢地主' : '叫地主') } }, callLabel),
+                    createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => { onCall(false); showAction(view.mySeat, view.hasCalled ? '不抢' : '不叫') } }, view.hasCalled ? '不抢' : '不叫'),
                   )
                 : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
             : (view.phase === 'playing'
@@ -520,7 +686,7 @@ function GameTableShell(props: {
                           notice && createElement('div', { className: 'ddz-action-bubble', role: 'status', onClick: onDismissNotice }, notice),
                           createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onHint }, '提示'),
                         ),
-                        createElement('button', { className: 'ddz-btn ddz-btn-ghost', disabled: !canPass, onClick: onPass }, '过'),
+                        createElement('button', { className: 'ddz-btn ddz-btn-ghost', disabled: !canPass, onClick: () => { onPass(); showAction(view.mySeat, '过'); clearSeatCards(view.mySeat) } }, '过'),
                         isMyTurn && showCountdown && createElement('span', {
                           className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
                           'aria-live': 'polite',
@@ -625,6 +791,23 @@ function Lobby(props: {
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [editingNickname, setEditingNickname] = useState(false)
   const [nicknameDraft, setNicknameDraft] = useState(profile.nickname)
+  // 匹配已等待秒数（用于在“匹配中…”旁展示已等待时长）
+  const [matchElapsed, setMatchElapsed] = useState(0)
+  useEffect(() => {
+    if (!matching) return
+    setMatchElapsed(0)
+    const timer = window.setInterval(() => setMatchElapsed((s) => s + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [matching])
+
+  // 段位说明弹窗
+  const [rankInfoOpen, setRankInfoOpen] = useState(false)
+  useEffect(() => {
+    if (!rankInfoOpen) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setRankInfoOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [rankInfoOpen])
 
   const saveNickname = () => {
     const nickname = limitNickname(nicknameDraft)
@@ -694,7 +877,14 @@ function Lobby(props: {
                 ),
             createElement('div', { className: 'ddz-dim ddz-profile-uid' }, 'UID ' + profile.uid.slice(0, 8)),
           ),
-          createElement('span', { className: 'ddz-rank' }, rank.name),
+          createElement('button', {
+            type: 'button',
+            className: 'ddz-rank',
+            'aria-haspopup': 'dialog',
+            'aria-expanded': rankInfoOpen,
+            title: '查看段位说明',
+            onClick: () => setRankInfoOpen(true),
+          }, rank.name),
         ),
         createElement('div', { className: 'ddz-balance ddz-row' },
           createElement('div', { className: 'ddz-balance-copy' },
@@ -754,7 +944,7 @@ function Lobby(props: {
     createElement('div', { className: 'ddz-lobby-actions' },
       matching
         ? createElement('button', { className: 'ddz-btn ddz-btn-red', onClick: onCancelMatch },
-            `匹配中… ${matchCount}/3（点击取消）`)
+            `匹配中… ${matchElapsed}s · ${matchCount}/3（点击取消）`)
         : createElement('button', {
             className: 'ddz-btn',
             disabled: !online || balance < (tableById(tableId)?.minBalance ?? 0),
@@ -768,6 +958,44 @@ function Lobby(props: {
     ),
     createElement('div', { className: 'ddz-lobby-version' }, `斗地主 v${APP_VERSION}`),
     createElement('div', { className: 'ddz-disclaimer' }, 'Token 为虚拟货币，仅作娱乐用途，不可兑换任何真实货币或服务（性质类似欢乐豆）'),
+    rankInfoOpen && createElement('div', { className: 'ddz-dialog', onClick: () => setRankInfoOpen(false) },
+      createElement('div', {
+        className: 'ddz-dialog-card',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': '段位体系说明',
+        onClick: (event: { stopPropagation: () => void }) => event.stopPropagation(),
+      },
+        createElement('h3', { className: 'ddz-dialog-title' }, '段位体系'),
+        createElement('div', { className: 'ddz-dialog-body' },
+          '段位按 Token 当前余额实时划分：余额达标即升段，输钱掉余额即降段。段位仅作荣耀展示，不参与匹配。'),
+        createElement('div', { className: 'ddz-rank-table', role: 'list' },
+          ...CONFIG.ranks.map((r, i) => {
+            const next = CONFIG.ranks[i + 1]
+            const range = next
+              ? `${r.min.toLocaleString()} – ${(next.min - 1).toLocaleString()}`
+              : `${r.min.toLocaleString()}+`
+            const isCurrent = r.id === rank.id
+            return createElement('div', {
+              key: r.id,
+              role: 'listitem',
+              className: 'ddz-rank-row' + (isCurrent ? ' is-current' : ''),
+            },
+              createElement('div', { className: 'ddz-rank-row-top' },
+                createElement('span', { className: 'ddz-rank-row-name' },
+                  r.name,
+                  isCurrent && createElement('span', { className: 'ddz-rank-row-current' }, '当前段位'),
+                ),
+                createElement('span', { className: 'ddz-rank-row-range' }, range),
+              ),
+            )
+          }),
+        ),
+        createElement('div', { className: 'ddz-row', style: { justifyContent: 'flex-end', gap: 10, marginTop: 16 } },
+          createElement('button', { className: 'ddz-btn', onClick: () => setRankInfoOpen(false) }, '知道了'),
+        ),
+      ),
+    ),
   )
 }
 
@@ -961,6 +1189,9 @@ const PIP_MIN_WIDTH = 360
 const PIP_MIN_HEIGHT = 280
 const PIP_MAX_WIDTH = 680
 const PIP_MAX_HEIGHT = 600
+/** 小窗长宽比约束（宽/高）：不能过窄过高，也不能过宽过扁（高 ≤ 1.43×宽，宽 ≤ 1.8×高） */
+const PIP_MIN_ASPECT = 0.7
+const PIP_MAX_ASPECT = 1.8
 
 function getPipLimits() {
   const maxWidth = Math.max(1, window.innerWidth - 24)
@@ -973,15 +1204,26 @@ function getPipLimits() {
   }
 }
 
-function clampPipBounds(bounds: PipBounds): PipBounds {
+function clampPipBounds(bounds: PipBounds, anchor?: { right?: boolean; bottom?: boolean }): PipBounds {
   const limits = getPipLimits()
-  const width = Math.min(Math.max(bounds.width, limits.minWidth), limits.maxWidth)
-  const height = Math.min(Math.max(bounds.height, limits.minHeight), limits.maxHeight)
+  const right = bounds.left + bounds.width
+  const bottom = bounds.top + bounds.height
+  let width = Math.min(Math.max(bounds.width, limits.minWidth), limits.maxWidth)
+  let height = Math.min(Math.max(bounds.height, limits.minHeight), limits.maxHeight)
+  // 长宽比约束：过宽则限制宽度、过窄则限制高度（再兜底回最小尺寸）
+  if (width / height > PIP_MAX_ASPECT) width = Math.max(limits.minWidth, height * PIP_MAX_ASPECT)
+  else if (width / height < PIP_MIN_ASPECT) height = Math.max(limits.minHeight, width / PIP_MIN_ASPECT)
+  width = Math.min(Math.max(width, limits.minWidth), limits.maxWidth)
+  height = Math.min(Math.max(height, limits.minHeight), limits.maxHeight)
+  // 尺寸变化后按锚定边回算位置，避免小窗整体跳动：
+  // 拖左/上边时，右/下边为锚定边，宽度/高度被约束后回算左/上位置（其余情况保持左/上不动）。
+  const left = anchor?.right ? right - width : bounds.left
+  const top = anchor?.bottom ? bottom - height : bounds.top
   return {
     width,
     height,
-    left: Math.min(Math.max(bounds.left, 0), Math.max(0, window.innerWidth - width)),
-    top: Math.min(Math.max(bounds.top, 0), Math.max(0, window.innerHeight - height)),
+    left: Math.min(Math.max(left, 0), Math.max(0, window.innerWidth - width)),
+    top: Math.min(Math.max(top, 0), Math.max(0, window.innerHeight - height)),
   }
 }
 
@@ -1024,7 +1266,11 @@ function resizePipBounds(start: PipBounds, direction: PipResizeDirection, deltaX
     top = bottom - height
   }
 
-  return clampPipBounds({ left, top, width, height })
+  // 超过长宽比约束时，锚定被拖拽边的对边（拖左/上 → 固定右/下），保证小窗不整体移动
+  return clampPipBounds({ left, top, width, height }, {
+    right: direction.includes('w'),
+    bottom: direction.includes('n'),
+  })
 }
 
 function findHostNewSessionButton(): HTMLElement | null {
@@ -1208,8 +1454,14 @@ function SidebarEntry(props: { onOpen: () => void; active: boolean }) {
 export function DoudizhuApp() {
   const [open, setOpen] = useState(false)
   const [standaloneOpen, setStandaloneOpen] = useState(false)
+  // 宿主系统级模态（设置等 aria-modal 弹层）是否打开：打开时把斗地主的浮层下沉到宿主遮罩
+  // 之下，入口与侧栏其它按钮一致变暗、不可点击，避免“依然亮着”盖在系统设置面板上。
+  const [hostModal, setHostModal] = useState(false)
   const [sidebarRight, setSidebarRight] = useState(280)
   const [pipBounds, setPipBounds] = useState<PipBounds>(() => getInitialPipBounds())
+  // 小窗内容自适应缩放比例：内容按可用区域等比缩放，避免出现滑块
+  const [pipScale, setPipScale] = useState(1)
+  const pipScaleRef = useRef<HTMLDivElement | null>(null)
   const [profile, setProfile] = useState<Profile>(() => loadProfile())
   const [balance, setBalance] = useState(0)
   const [claimed, setClaimed] = useState(false)
@@ -1275,6 +1527,24 @@ export function DoudizhuApp() {
     }
   }, [])
 
+  // 监测宿主系统级模态（设置/附件查看等 `aria-modal` 弹层），打开时让斗地主浮层让位。
+  // 斗地主自己的弹层（版本不兼容对话框等）挂在 [data-dsh-doudizhu] 根下，不计入。
+  useEffect(() => {
+    const hasHostModal = () => {
+      const modals = document.querySelectorAll<HTMLElement>('[aria-modal="true"]')
+      for (const el of modals) {
+        if (el.closest('[data-dsh-doudizhu]')) continue
+        return true
+      }
+      return false
+    }
+    const check = () => setHostModal(hasHostModal())
+    check()
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-modal', 'role'] })
+    return () => observer.disconnect()
+  }, [])
+
   useEffect(() => {
     const closeOnHostNavigation = (event: MouseEvent) => {
       if (!standaloneOpen && !open) return
@@ -1336,6 +1606,30 @@ export function DoudizhuApp() {
       endInteraction()
     }
   }, [open])
+
+  // 小窗内容自适应：按画布可用区域等比缩放内容，避免出现滑块。
+  // transform 不改变布局尺寸，可放心用 scrollWidth/scrollHeight 测自然尺寸；缩放不回写布局，不会形成循环。
+  useEffect(() => {
+    if (!open) {
+      setPipScale(1)
+      return
+    }
+    const el = pipScaleRef.current
+    const canvas = el?.parentElement as HTMLElement | null
+    if (!el || !canvas) return
+    const update = () => {
+      const availW = canvas.clientWidth
+      const availH = canvas.clientHeight
+      const naturalW = el.scrollWidth || availW
+      const naturalH = el.scrollHeight || availH
+      setPipScale(Math.min(1, availW / naturalW, availH / naturalH))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(canvas)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [open, screen])
 
   const beginPipInteraction = (
     event: ReactPointerEvent<HTMLDivElement>,
@@ -1564,7 +1858,7 @@ export function DoudizhuApp() {
     }),
   )
 
-  return createElement('div', { className: 'ddz-root' },
+  return createElement('div', { className: 'ddz-root', 'data-host-modal': hostModal ? 'true' : undefined },
     createElement('style', null, STYLE),
     notice && createElement('div', { className: 'ddz-toast', onClick: () => setNotice(null) }, notice),
     versionError && createElement('div', { className: 'ddz-dialog' },
@@ -1609,7 +1903,13 @@ export function DoudizhuApp() {
             createElement('button', { type: 'button', className: 'ddz-pip-toolbar-btn', 'aria-label': '关闭斗地主小窗', onClick: () => setOpen(false) }, '×'),
             ),
           ),
-        panelContent,
+        createElement('div', { className: 'ddz-pip-canvas' },
+          createElement('div', {
+            ref: pipScaleRef,
+            className: 'ddz-pip-scale',
+            style: { transform: `scale(${pipScale})` },
+          }, panelContent),
+        ),
       ),
       (['n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw'] as PipResizeDirection[]).map((direction) =>
         createElement('div', {

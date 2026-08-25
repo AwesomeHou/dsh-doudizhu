@@ -183,6 +183,16 @@ describe('结算 settle', () => {
 })
 
 describe('叫地主', () => {
+  it('callOrder 从随机起点开始，按 (seat+1)%3 逆时针推进', () => {
+    for (const seed of [1, 2, 3, 4, 5, 42]) {
+      const g = createGame(rng(seed))
+      const [a, b, c] = g.callOrder
+      expect(a).toBeGreaterThanOrEqual(0)
+      expect(b).toBe(((a + 1) % 3) as 0 | 1 | 2)
+      expect(c).toBe(((a + 2) % 3) as 0 | 1 | 2)
+    }
+  })
+
   it('无人叫 → redeal', () => {
     const g0 = createGame(rng(7))
     let g = g0

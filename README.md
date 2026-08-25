@@ -13,11 +13,8 @@
 
 ## 截图预览
 
-| 游戏大厅 | 对局牌桌 |
-|---|---|
-| ![游戏大厅](docs/screenshots/screenshot1.png) | ![对局牌桌](docs/screenshots/screenshot2.png) |
-
-> 截图存放于 `docs/screenshots/`，重新发版时随仓库更新。
+![游戏大厅](docs/screenshots/screenshot1.png)
+![对局牌桌](docs/screenshots/screenshot2.png)
 
 ## 快速导航
 

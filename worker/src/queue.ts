@@ -189,7 +189,7 @@ export class Queue {
     const roomMeta: RoomMeta = {
       id: roomId,
       tableId,
-      base: tableById(tableId)?.base ?? 10_000,
+      base: tableById(tableId)?.base ?? 15,
       createdAt: Date.now(),
       players: trio.map((e, i) => ({
         uid: e.uid,

@@ -93,7 +93,7 @@ app.post('/api/daily', async (c) => {
   if (await hasClaimed(c.env, payload.uid, day)) {
     return fail(c, 409, 'already claimed today')
   }
-  const amount = 200_000
+  const amount = CONFIG.dailyTokens
   await insertClaim(c.env, payload.uid, day, amount)
   const balance = await addLedger(c.env, payload.uid, 'daily', amount, `daily:${day}`)
   return c.json({ amount, balance })
@@ -134,6 +134,7 @@ app.post('/api/lobby/queue', async (c) => {
   const player = await getPlayer(c.env, payload.uid)
   if (!player) return fail(c, 404, 'player not found')
   if (player.balance < table.minBalance) return fail(c, 403, 'balance below table minimum')
+  if (table.maxBalance !== undefined && player.balance > table.maxBalance) return fail(c, 403, 'balance above table maximum')
   const result = await joinQueue(c.env, tableId, {
     uid: player.uid,
     nickname: player.nickname,

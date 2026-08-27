@@ -103,15 +103,12 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 .ddz-card-rank{font-size:18px;letter-spacing:-.04em}
 .ddz-card-rank.long{font-size:15px;letter-spacing:-.08em}
 .ddz-card-suit{font-size:13px;line-height:1}
-/* 大王/小王：JOKER 英文竖排，大王红、小王黑 */
+/* 大王/小王：JOKER 英文竖排（只保留中央一列，字号收缩以完整落在牌面内），大王红、小王黑 */
 .ddz-joker-card{justify-content:center;align-items:center}
-.ddz-joker-corner{flex-direction:column;gap:1px}
-.ddz-joker-letter{display:block;font-size:12px;line-height:1;font-weight:800}
-.ddz-joker-main{display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:900;line-height:1;font-size:19px;letter-spacing:.02em}
-.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:25px}
-.ddz-joker-card.ddz-card-big .ddz-joker-letter{font-size:14px}
-.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:12px}
-.ddz-joker-card.ddz-card-mini .ddz-joker-letter{font-size:8px}
+.ddz-joker-main{display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:900;line-height:1;font-size:10px;letter-spacing:.02em}
+.ddz-joker-letter{display:block;line-height:1}
+.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:13px}
+.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:6px;gap:1px}
 /* 自己的手牌放大 */
 .ddz-card-big{width:56px;height:80px;border-radius:9px;font-size:24px}
 .ddz-card-big .ddz-card-rank{font-size:22px}
@@ -123,16 +120,15 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 .ddz-card-big.sel{transform:translateY(-18px)}
 .ddz-card-big.sel:hover{transform:translateY(-18px);box-shadow:0 0 0 2px var(--dz-blue),0 5px 10px rgba(77,107,254,.18)}
 .ddz-human-hand .ddz-card-stack-item:not(:first-child){margin-left:-32px}
-/* 明牌展示用的小牌 */
+/* 明牌展示用的小牌（只保留左上角点数+花色） */
 .ddz-card-mini{width:26px;height:38px;border-radius:5px;font-size:13px}
-.ddz-card-mini .ddz-card-rank{font-size:12px}
-.ddz-card-mini .ddz-card-rank.long{font-size:10px;letter-spacing:-.05em}
-.ddz-card-mini .ddz-card-suit{font-size:9px}
+.ddz-card-mini .ddz-card-rank{font-size:10px}
+.ddz-card-mini .ddz-card-rank.long{font-size:8px;letter-spacing:-.05em}
+.ddz-card-mini .ddz-card-suit{font-size:8px}
 .ddz-card-mini .ddz-card-corner.top{top:3px;left:3px}
-.ddz-card-mini .ddz-card-corner.bottom{right:3px;bottom:3px}
 .ddz-revealed-row{display:flex;flex-wrap:wrap;justify-content:center;gap:0;max-width:220px}
 .ddz-revealed-card{flex:0 0 auto}
-.ddz-revealed-card:not(:first-child){margin-left:-15px}
+.ddz-revealed-card:not(:first-child){margin-left:-13px}
 .ddz-revealed-card .ddz-card{cursor:default}
 .ddz-revealed-card .ddz-card:hover{transform:none;box-shadow:0 1px 3px rgba(26,32,47,.12)}
 /* 发牌完成后的整理动画 */
@@ -314,7 +310,7 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 @keyframes ddz-action-ready{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes ddz-turn-pulse{0%,100%{box-shadow:0 2px 6px rgba(26,32,47,.08)}50%{box-shadow:0 0 0 3px rgba(77,107,254,.12),0 3px 8px rgba(77,107,254,.16)}}
 @keyframes ddz-countdown-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
- @media (max-width:720px){.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-big{width:46px;height:66px;font-size:20px}.ddz-card-big .ddz-card-rank{font-size:18px}.ddz-card-big .ddz-card-rank.long{font-size:15px}.ddz-card-big .ddz-card-suit{font-size:13px}.ddz-card-big .ddz-card-corner.top{top:5px;left:5px}.ddz-card-big .ddz-card-corner.bottom{right:5px;bottom:5px}.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:21px}.ddz-joker-card.ddz-card-big .ddz-joker-letter{font-size:12px}.ddz-card-mini{width:22px;height:32px;font-size:11px}.ddz-card-mini .ddz-card-rank{font-size:10px}.ddz-card-mini .ddz-card-rank.long{font-size:8px}.ddz-card-mini .ddz-card-suit{font-size:8px}.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:10px}.ddz-joker-card.ddz-card-mini .ddz-joker-letter{font-size:7px}.ddz-human-hand .ddz-card-stack-item:not(:first-child){margin-left:-25px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}}
+ @media (max-width:720px){.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-big{width:46px;height:66px;font-size:20px}.ddz-card-big .ddz-card-rank{font-size:18px}.ddz-card-big .ddz-card-rank.long{font-size:15px}.ddz-card-big .ddz-card-suit{font-size:13px}.ddz-card-big .ddz-card-corner.top{top:5px;left:5px}.ddz-card-big .ddz-card-corner.bottom{right:5px;bottom:5px}.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:11px}.ddz-card-mini{width:22px;height:32px;font-size:11px}.ddz-card-mini .ddz-card-rank{font-size:10px}.ddz-card-mini .ddz-card-rank.long{font-size:8px}.ddz-card-mini .ddz-card-suit{font-size:8px}.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:5px;gap:1px}.ddz-human-hand .ddz-card-stack-item:not(:first-child){margin-left:-25px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}}
  @media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-sidebar-entry,.ddz-card{transition:none}.ddz-card:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-pip-window,.ddz-modal,.ddz-toast,.ddz-avatar-picker,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent,.ddz-special-play,.ddz-special-label,.ddz-hand-arranging .ddz-hand-card{animation:none!important}}
 `
 
@@ -327,7 +323,7 @@ function CardView({ card, selected, onClick, size = 'normal' }: { card: Card; se
   const label = cardName(card)
   const sizeClass = size === 'big' ? ' ddz-card-big' : size === 'mini' ? ' ddz-card-mini' : ''
   if (isJoker) {
-    // 大王/小王：英文 JOKER 竖排，大王红色、小王黑色
+    // 大王/小王：英文 JOKER 竖排（只保留中央一列，字号收缩到完整落在牌面内），大王红色、小王黑色
     const letters = 'JOKER'.split('')
     return createElement('div', {
       className: 'ddz-card ddz-joker-card' + (isRed ? ' red' : '') + (selected ? ' sel' : '') + sizeClass,
@@ -340,8 +336,6 @@ function CardView({ card, selected, onClick, size = 'normal' }: { card: Card; se
         if (event.key === 'Enter' || event.key === ' ') onClick()
       } : undefined,
     },
-    createElement('span', { className: 'ddz-card-corner top ddz-joker-corner', 'aria-hidden': true },
-      ...letters.map((ch, i) => createElement('span', { key: i, className: 'ddz-joker-letter' }, ch))),
     createElement('span', { className: 'ddz-joker-main', 'aria-label': label },
       ...letters.map((ch, i) => createElement('span', { key: i, className: 'ddz-joker-letter' }, ch))),
     )
@@ -364,7 +358,8 @@ function CardView({ card, selected, onClick, size = 'normal' }: { card: Card; se
     createElement('span', { className: 'ddz-card-rank' + rankClass }, rank),
     createElement('span', { className: 'ddz-card-suit' }, suit),
   ),
-  createElement('span', { className: 'ddz-card-corner bottom', 'aria-hidden': true },
+  // 迷你小牌（明牌展示）只保留左上角，避免左右两角同时露花色看着像两种花色
+  size !== 'mini' && createElement('span', { className: 'ddz-card-corner bottom', 'aria-hidden': true },
     createElement('span', { className: 'ddz-card-suit' }, suit),
   ),
   )
@@ -913,8 +908,21 @@ function Lobby(props: {
   } = props
   const rank = rankForBalance(balance)
   const minBalance = Math.min(...CONFIG.tables.map((t) => t.minBalance))
+  const thresholdLabel = (t: { minBalance: number; maxBalance?: number }): string =>
+    t.maxBalance === undefined
+      ? `${t.minBalance.toLocaleString()}+`
+      : `${t.minBalance.toLocaleString()}–${t.maxBalance.toLocaleString()}`
   const lobbyLatencyClass = lobbyLatency === null ? '' : lobbyLatency < 100 ? ' good' : lobbyLatency < 250 ? ' mid' : ' bad'
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
+  // 桌别可进入性：余额需在 [min, max] 区间（max 可选）
+  const selectedTable = tableById(tableId)
+  const entryIssue = !selectedTable
+    ? null
+    : balance < selectedTable.minBalance
+      ? 'low'
+      : selectedTable.maxBalance !== undefined && balance > selectedTable.maxBalance
+        ? 'high'
+        : null
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [editingNickname, setEditingNickname] = useState(false)
   const [nicknameDraft, setNicknameDraft] = useState(profile.nickname)
@@ -1064,7 +1072,7 @@ function Lobby(props: {
         },
           createElement('div', { style: { fontWeight: 700 } }, t.label),
           createElement('div', { className: 'ddz-dim', style: { fontSize: 12 } },
-            `底注 ${t.base.toLocaleString()} · 余额门槛 ${t.minBalance.toLocaleString()}`),
+            `底分 ${t.base.toLocaleString()} · 余额门槛 ${thresholdLabel(t)}`),
         ),
       ),
     ),
@@ -1074,14 +1082,17 @@ function Lobby(props: {
             `匹配中… ${matchElapsed}s · ${matchCount}/3（点击取消）`)
         : createElement('button', {
             className: 'ddz-btn',
-            disabled: !online || balance < (tableById(tableId)?.minBalance ?? 0),
+            disabled: !online || entryIssue !== null,
             onClick: () => onStartOnline(tableId),
           }, '开始匹配'),
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onClose }, '最小化'),
     ),
-    balance < (tableById(tableId)?.minBalance ?? 0) &&
+    entryIssue === 'low' &&
       createElement('div', { className: 'ddz-dim ddz-helper' },
         '余额不足该桌门槛，先签到或领救济金'),
+    entryIssue === 'high' &&
+      createElement('div', { className: 'ddz-dim ddz-helper' },
+        '余额超过该桌上限，请选择更高档桌'),
     ),
     createElement('div', { className: 'ddz-lobby-version' }, `斗地主 v${APP_VERSION}`),
     createElement('div', { className: 'ddz-disclaimer' }, 'Token 为虚拟货币，仅作娱乐用途，不可兑换任何真实货币或服务（性质类似欢乐豆）'),

@@ -83,6 +83,11 @@ export function joinQueue(tableId: string): Promise<QueueResult> {
   return req('/api/lobby/queue', { method: 'POST', body: JSON.stringify({ tableId }) })
 }
 
+/** 直接进入机器人对局：跳过等待，立即用「本玩家 + 2 机器人」开局 */
+export function joinQueueBot(tableId: string): Promise<QueueResult> {
+  return req('/api/lobby/queue', { method: 'POST', body: JSON.stringify({ tableId, forceBot: true }) })
+}
+
 export function pollQueue(tableId: string): Promise<QueueResult> {
   return req(`/api/lobby/status?tableId=${encodeURIComponent(tableId)}`)
 }

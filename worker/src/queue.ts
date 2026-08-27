@@ -79,6 +79,18 @@ export class Queue {
           const result = await this.state.blockConcurrencyWhile(() => this.join(entry))
           return Response.json(result)
         }
+        case 'forceBot': {
+          // 直接进入机器人对局：把玩家移出普通队列，立即用「本玩家 + 2 机器人」开局
+          const entry = body.entry as QueueEntry
+          if (!entry?.uid) return Response.json({ error: 'missing entry' }, { status: 400 })
+          const result = await this.state.blockConcurrencyWhile(async () => {
+            let queue = await this.load()
+            queue = queue.filter((e) => e.uid !== entry.uid)
+            await this.save(queue)
+            return this.forceBotRoom(entry)
+          })
+          return Response.json(result)
+        }
         case 'leave': {
           await this.state.blockConcurrencyWhile(() => body.uid ? this.leave(body.uid) : Promise.resolve())
           return Response.json({ ok: true })
@@ -165,7 +177,7 @@ export class Queue {
 
   /**
    * 满足开局条件（够 3 人，或已等待 ≥ BOT_FILL_MS）时创建房间；不足则返回 null。
-   * 真人不足 3 人时用机器人垫满（模拟真人：真实感昵称 + 大余额）。
+   * 真人不足 3 人时用机器人垫满（模拟真人：真实感昵称 + 接近真人余额）。
    */
   private async tryCreateRoom(queue: QueueEntry[]): Promise<JoinResult | null> {
     if (queue.length === 0) return null
@@ -178,11 +190,37 @@ export class Queue {
     if (queue.length < 3 && Date.now() - newest < BOT_FILL_GRACE_MS) return null
     const trio = queue.slice(0, 3)
     const rest = queue.slice(3)
-    // 机器人余额以本桌真人平均余额为基准，尽量贴近玩家（避免相差太远穿帮）
+    const result = await this.buildRoom(trio)
+    await this.save(rest)
+    return result
+  }
+
+  /**
+   * 直接进入机器人对局：本玩家 + 2 个机器人立即开局（不占用普通匹配队列）。
+   * 若该玩家已有活跃房间（断线/重复点击），回到原房间。
+   */
+  private async forceBotRoom(player: QueueEntry): Promise<JoinResult> {
+    const existingRoomId = await this.state.storage.get<string>(uidRoomDOKey(player.uid))
+      ?? await this.env.KVPUBLIC.get(uidRoomKey(player.uid))
+    if (existingRoomId) {
+      const metaRaw = await this.env.KVPUBLIC.get(roomKey(existingRoomId))
+      if (metaRaw) return { status: 'matched', roomId: existingRoomId }
+      // 原房间元数据已清理 → 抹掉残留映射，按正常开机器人局处理
+      await this.state.storage.delete(uidRoomDOKey(player.uid))
+      await this.env.KVPUBLIC.delete(uidRoomKey(player.uid))
+    }
+    // 只带本玩家建房，buildRoom 会用机器人垫满剩余 2 席
+    return this.buildRoom([player])
+  }
+
+  /** 创建房间（原子段内执行）：写 KV room/uid 映射 + DO 本地强一致映射；机器人余额贴近真人 */
+  private async buildRoom(players: QueueEntry[]): Promise<JoinResult> {
+    const trio = players.slice(0, 3)
     const realPlayers = trio.filter((e) => !e.uid.startsWith('bot:'))
     const avgRealBalance = realPlayers.length > 0
       ? realPlayers.reduce((sum, e) => sum + e.tokenBalance, 0) / realPlayers.length
       : 0
+    // 机器人余额以真人平均余额为基准（±20%），避免"机器人富得离谱"穿帮
     while (trio.length < 3) trio.push(botEntry(avgRealBalance))
     const tableId = this.tableId
     const roomId = crypto.randomUUID()
@@ -212,7 +250,6 @@ export class Queue {
         { expirationTtl: ROOM_TTL_SECONDS } as unknown as DurableObjectPutOptions,
       )
     }
-    await this.save(rest)
     return { status: 'matched', roomId }
   }
 
@@ -240,6 +277,11 @@ async function call<T>(stub: DurableObjectStub, action: string, payload: unknown
 /** 加入匹配队列；满 3 人时创建房间并返回 roomId */
 export function joinQueue(env: Env, tableId: string, entry: QueueEntry): Promise<JoinResult> {
   return call(stub(env, tableId), 'join', { entry })
+}
+
+/** 直接进入机器人对局：移出普通队列，立即用「本玩家 + 2 机器人」开局 */
+export function forceBotQueue(env: Env, tableId: string, entry: QueueEntry): Promise<JoinResult> {
+  return call(stub(env, tableId), 'forceBot', { entry })
 }
 
 export function leaveQueue(env: Env, tableId: string, uid: string): Promise<{ ok: true }> {

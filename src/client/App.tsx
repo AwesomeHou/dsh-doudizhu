@@ -911,6 +911,7 @@ function Lobby(props: {
   onRetryConnect: () => void
   onRescue: () => void
   onStartOnline: (tableId: string) => void
+  onStartBot: () => void
   onCancelMatch: () => void
   onProfileChange: (profile: Profile) => void
   onClose: () => void
@@ -918,7 +919,7 @@ function Lobby(props: {
   const {
     profile, balance, onClaim, claimed, online, matching, matchCount, rescued, onRescue,
     syncing, lobbyLatency, onRetryConnect,
-    onStartOnline, onCancelMatch, onProfileChange, onClose,
+    onStartOnline, onStartBot, onCancelMatch, onProfileChange, onClose,
   } = props
   const rank = rankForBalance(balance)
   const minBalance = Math.min(...CONFIG.tables.map((t) => t.minBalance))
@@ -1100,6 +1101,9 @@ function Lobby(props: {
             onClick: () => onStartOnline(tableId),
           }, '开始匹配'),
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onClose }, '最小化'),
+    ),
+    matching && createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', marginTop: 10 } },
+      createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onStartBot }, '直接进入机器人对局'),
     ),
     entryIssue === 'low' &&
       createElement('div', { className: 'ddz-dim ddz-helper' },
@@ -1980,6 +1984,31 @@ export function DoudizhuApp() {
     if (online) api.leaveQueue(tableId).catch(() => undefined)
   }
 
+  // 直接进入机器人对局：跳过匹配等待，立即开「自己 + 2 机器人」的牌局
+  const startBotGame = async () => {
+    if (syncRef.current) await syncRef.current
+    if (!online) { setNotice('在线状态未就绪，请重试'); return }
+    // 先停掉普通匹配轮询（服务端 forceBot 会把玩家移出普通队列）
+    if (pollTimerRef.current !== null) {
+      window.clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+    setResult(null)
+    try {
+      const r = await api.joinQueueBot(tableId)
+      if (r.status === 'matched') {
+        setRoomId(r.roomId)
+        setMatching(false)
+        setScreen('table')
+      } else {
+        setNotice('机器人对局开启失败，请重试')
+      }
+    } catch (e) {
+      setMatching(false)
+      setNotice(e instanceof Error ? e.message : '进入机器人对局失败')
+    }
+  }
+
   const updateProfile = (next: Profile) => {
     const normalized = { ...next, nickname: limitNickname(next.nickname) }
     setProfile(normalized)
@@ -2025,6 +2054,7 @@ export function DoudizhuApp() {
       onRescue: rescue,
       onRetryConnect: enterOnline,
       onStartOnline: startOnline,
+      onStartBot: startBotGame,
       onCancelMatch: cancelMatch,
       onProfileChange: updateProfile,
       onClose: closeSurface,

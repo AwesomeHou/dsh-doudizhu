@@ -9,7 +9,7 @@ import { rankForBalance, tableById, CONFIG } from '../../shared/config.ts'
 import { APP_VERSION, PROTOCOL_VERSION } from '../../shared/protocol.ts'
 import { verifyToken, signToken, bearerToken, type AuthPayload } from './auth.ts'
 import { addLedger, getLedger, getPlayer, hasClaimed, hasRescued, insertClaim, insertRescue, updateProfile, upsertPlayer, type PlayerRow } from './db.ts'
-import { joinQueue, leaveQueue, pollStatus, getRoomMeta, clearRoom } from './queue.ts'
+import { joinQueue, leaveQueue, pollStatus, getRoomMeta, clearRoom, forceBotQueue } from './queue.ts'
 import { ingestAnalytics, adminStats, type AnalyticsEvent } from './analytics.ts'
 import type { Env } from './types.ts'
 
@@ -129,19 +129,24 @@ app.post('/api/lobby/queue', async (c) => {
   try { payload = await auth(c) } catch { return fail(c, 401, 'unauthorized') }
   const body = await c.req.json().catch(() => null)
   const tableId = typeof body?.tableId === 'string' ? body.tableId : ''
+  const forceBot = body?.forceBot === true
   const table = tableById(tableId)
   if (!table) return fail(c, 400, 'unknown table')
   const player = await getPlayer(c.env, payload.uid)
   if (!player) return fail(c, 404, 'player not found')
   if (player.balance < table.minBalance) return fail(c, 403, 'balance below table minimum')
   if (table.maxBalance !== undefined && player.balance > table.maxBalance) return fail(c, 403, 'balance above table maximum')
-  const result = await joinQueue(c.env, tableId, {
+  const entry = {
     uid: player.uid,
     nickname: player.nickname,
     avatarId: player.avatar_id,
     tokenBalance: player.balance,
     joinedAt: Date.now(),
-  })
+  }
+  // forceBot=true → 跳过等待，立即用「本玩家 + 2 机器人」开局
+  const result = forceBot
+    ? await forceBotQueue(c.env, tableId, entry)
+    : await joinQueue(c.env, tableId, entry)
   return c.json(result)
 })
 

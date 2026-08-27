@@ -494,6 +494,11 @@ function GameTableShell(props: {
   useEffect(() => {
     const prev = prevPhaseRef.current
     prevPhaseRef.current = view.phase
+    // 抢地主/加倍环节结束 → 自动清空所有人面前的出牌框（行动文本 + 已出牌）
+    if ((prev === 'robbing' && view.phase === 'doubling') || (prev === 'doubling' && view.phase === 'playing')) {
+      setActionText({} as Record<Seat, string | null>)
+      setPlayedBySeat([null, null, null])
+    }
     if (prev === 'dealing' && view.phase !== 'dealing' && view.phase !== 'settled') {
       setArranging(true)
       const t = window.setTimeout(() => setArranging(false), 700)
@@ -546,10 +551,10 @@ function GameTableShell(props: {
     prevSnapshotRef.current = snapshotOf(view)
   }, [view, showAction, clearSeatCards])
 
-  // 轮到某座位 → 清空该座位出牌框里的行动文本（“过”轮到自己时消失）。
-  // 只在出牌阶段首手落牌后（callingClearedRef=true）生效，避免误清叫牌阶段最后一条“叫/抢”文本。
+  // 出牌环节轮到某座位 → 先清空该座位出牌框里的行动文本（“过”轮到自己时消失）。
+  // 抢地主/加倍环节结束时已清空所有行动文本，这里无需再受 callingClearedRef 限制。
   useEffect(() => {
-    if (view.phase !== 'playing' || !callingClearedRef.current) return
+    if (view.phase !== 'playing') return
     const seat = view.current
     setActionText((prev) => (prev[seat] == null ? prev : { ...prev, [seat]: null }))
   }, [view.phase, view.current])

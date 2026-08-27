@@ -66,13 +66,18 @@ describe('牌桌视图的阶段状态', () => {
     expect(view.seats.find((seat) => seat.seat === firstCaller)?.role).toBe('landlord')
   })
 
-  it('明牌座位的完整手牌下发到视图', () => {
+  it('明牌座位的完整手牌下发到视图且按点数降序排列', () => {
     const initial = createGame(() => 0.1)
     const afterDeal = applyAction(initial, { type: 'deal' }) // 第 1 轮
     const state = applyAction(afterDeal, { type: 'ming', seat: 1 })
     const view = tableViewFromEngine(state, 0, SEAT_META)
     expect(view.revealed[1]).toBe(true)
-    expect(view.seats[1]?.hand).toHaveLength(6)
+    const hand = view.seats[1]?.hand
+    expect(hand).toHaveLength(6)
+    // 明牌手牌按点数降序（他人看到有顺序）
+    for (let i = 1; i < hand!.length; i++) {
+      expect(hand![i - 1]!.r).toBeGreaterThanOrEqual(hand![i]!.r)
+    }
     expect(view.seats[2]?.hand).toBeUndefined()
   })
 })

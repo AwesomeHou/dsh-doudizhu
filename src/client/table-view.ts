@@ -5,6 +5,7 @@
  */
 import type { GameState } from '../../shared/engine/game.ts'
 import type { GameStateForPlayer } from '../../shared/protocol.ts'
+import { sortHand } from '../../shared/engine/deck.ts'
 import type { Card, Phase, Seat } from '../../shared/engine/types.ts'
 
 export interface SeatView {
@@ -73,7 +74,7 @@ export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<
       connected: true,
       tokenBalance: meta.tokenBalance,
       isHuman: seat === mySeat,
-      hand: s.revealed[seat] ? s.hands[seat]!.map((c) => ({ ...c })) : undefined,
+      hand: s.revealed[seat] ? sortHand(s.hands[seat]!.map((c) => ({ ...c }))) : undefined,
     }
   })
   return {
@@ -148,7 +149,7 @@ export function tableViewFromProtocol(p: GameStateForPlayer): TableView {
       connected: s.connected,
       tokenBalance: s.tokenBalance,
       isHuman: s.seat === p.seat,
-      hand: s.hand ? s.hand.map(asCard) : undefined,
+      hand: s.hand ? sortHand(s.hand.map(asCard)) : undefined,
     })),
     turnStartedAt: p.turnStartedAt,
     turnTimeoutMs: p.turnTimeoutMs,

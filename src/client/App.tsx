@@ -777,6 +777,10 @@ function GameTableShell(props: {
                   ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
                       createElement('button', { className: 'ddz-btn', onClick: () => { onCall(true); showAction(view.mySeat, '叫地主') } }, '叫地主'),
                       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => { onCall(false); showAction(view.mySeat, '不叫') } }, '不叫'),
+                      showCountdown && createElement('span', {
+                        className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
+                        'aria-live': 'polite',
+                      }, `${remainingSeconds}s`),
                     )
                   : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
               : view.phase === 'robbing'
@@ -784,6 +788,10 @@ function GameTableShell(props: {
                     ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
                         createElement('button', { className: 'ddz-btn', onClick: () => { onCall(true); showAction(view.mySeat, '抢地主') } }, '抢地主'),
                         createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => { onCall(false); showAction(view.mySeat, '不抢') } }, '不抢'),
+                        showCountdown && createElement('span', {
+                          className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
+                          'aria-live': 'polite',
+                        }, `${remainingSeconds}s`),
                       )
                     : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待抢地主…'))
                 : view.phase === 'doubling'

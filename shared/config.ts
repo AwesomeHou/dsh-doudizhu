@@ -28,6 +28,8 @@ export const CONFIG = {
   rakeRate: 0.05,
   /** 每手出牌倒计时（ms） */
   turnTimeoutMs: 25_000,
+  /** 叫地主/抢地主/加倍等决策倒计时（ms） */
+  decisionTimeoutMs: 5_000,
   /** 桌别（门槛=底注×N，保证救济金 2000 可回到最低桌） */
   tables: [
     { id: 'novice', label: '新手场', base: 15, minBalance: 1_000, maxBalance: 150_000 },

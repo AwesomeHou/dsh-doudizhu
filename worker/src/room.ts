@@ -29,8 +29,8 @@ interface SeatState {
 
 const TURN_MS = CONFIG.turnTimeoutMs
 const AUTO_DISCONNECT_MS = 8_000
-/** 加倍环节每人限时 5s */
-const DOUBLE_MS = 5_000
+/** 叫地主/抢地主/加倍等决策环节每人限时 5s */
+const DECISION_MS = CONFIG.decisionTimeoutMs
 /** 发牌：每轮间隔（3 轮共约 3.6s） */
 const DEAL_INTERVAL_MS = 1_200
 
@@ -272,7 +272,9 @@ export class Room {
       else delay = 900 + Math.random() * 1600
     } else {
       const connected = s?.connected ?? false
-      delay = this.game.phase === 'doubling' ? DOUBLE_MS : connected ? TURN_MS : AUTO_DISCONNECT_MS
+      // 叫地主/抢地主/加倍等决策环节限时 5s；出牌环节按 25s 出牌时限
+      const deciding = this.game.phase === 'calling' || this.game.phase === 'robbing' || this.game.phase === 'doubling'
+      delay = deciding ? DECISION_MS : connected ? TURN_MS : AUTO_DISCONNECT_MS
     }
     this.turnTimer = setTimeout(() => void this.autoAct(seat), delay)
   }
@@ -436,7 +438,7 @@ export class Room {
         }
       }),
       turnStartedAt: Date.now(),
-      turnTimeoutMs: game.phase === 'doubling' ? DOUBLE_MS : TURN_MS,
+      turnTimeoutMs: (game.phase === 'calling' || game.phase === 'robbing' || game.phase === 'doubling') ? DECISION_MS : TURN_MS,
       finished: game.finished,
       winner: game.winner,
     }

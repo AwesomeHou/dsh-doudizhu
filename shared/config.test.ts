@@ -14,6 +14,11 @@ describe('经济数值（v0.3.0 调整）', () => {
     expect(CONFIG.startMultiplier).toBe(15)
   })
 
+  it('叫地主/抢地主/加倍决策倒计时 5s', () => {
+    expect(CONFIG.decisionTimeoutMs).toBe(5_000)
+    expect(CONFIG.turnTimeoutMs).toBe(25_000)
+  })
+
   it('桌别：新手场 15 / 普通场 80 / 高级场 480，门槛递增', () => {
     const [novice, normal, high] = CONFIG.tables
     expect(novice.base).toBe(15)

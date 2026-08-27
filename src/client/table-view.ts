@@ -47,6 +47,8 @@ export interface TableView {
   lastActor: Seat | null
   multiplier: number
   bombCount: number
+  /** 地主已出牌组数（=0 时地主可明牌，即第一轮出牌） */
+  landlordPlays: number
   spring: 'none' | 'landlord' | 'farmer'
   finished: boolean
   winner: 'landlord' | 'farmer' | null
@@ -57,8 +59,8 @@ export interface TableView {
 
 /** 本地引擎状态 → 视图（人类恒为 0 号座位） */
 export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<{ nickname: string; avatarId: string; tokenBalance: number }>): TableView {
-  // 发牌/叫地主阶段尚未确定地主；抢/加倍/出牌阶段显示当前地主候选
-  const landlord = s.phase === 'dealing' || s.phase === 'calling' ? null : s.landlord
+  // 发牌/叫地主/抢地主阶段不显示地主与农民标，抢地主结束（加倍阶段起）才显示
+  const landlord = s.phase === 'dealing' || s.phase === 'calling' || s.phase === 'robbing' ? null : s.landlord
   const playing = s.phase === 'playing'
   const seats: SeatView[] = ([0, 1, 2] as Seat[]).map((seat) => {
     const meta = seatMeta[seat] ?? { nickname: `座位${seat}`, avatarId: 'default-01', tokenBalance: 0 }
@@ -97,6 +99,7 @@ export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<
     lastActor: s.lastActor,
     multiplier: s.multiplier,
     bombCount: s.bombCount,
+    landlordPlays: s.landlordPlays,
     spring: s.spring,
     finished: s.finished,
     winner: s.winner,
@@ -132,6 +135,7 @@ export function tableViewFromProtocol(p: GameStateForPlayer): TableView {
     lastActor: p.lastActor as Seat | null,
     multiplier: p.multiplier,
     bombCount: p.bombCount,
+    landlordPlays: p.landlordPlays,
     spring: p.spring,
     finished: p.finished,
     winner: p.winner,
@@ -174,8 +178,9 @@ export function emptyTableView(mySeat: Seat = 0, myNickname = '你', myAvatar = 
     dealRound: 0,
     lastPlayCards: null,
     lastActor: null,
-    multiplier: 1,
+    multiplier: 15,
     bombCount: 0,
+    landlordPlays: 0,
     spring: 'none',
     finished: false,
     winner: null,

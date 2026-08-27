@@ -14,6 +14,7 @@ import { canBeat } from './compare.ts'
 import { dealInRounds } from './deck.ts'
 import { settle, type Settlement } from './scoring.ts'
 import { classify } from './valid.ts'
+import { CONFIG } from '../config.ts'
 import type { Card, Phase, Play, Role, Seat } from './types.ts'
 
 export interface MoveLog {
@@ -123,7 +124,8 @@ export function createGame(rng: () => number = Math.random): GameState {
     lastActor: null,
     lastPlayCards: null,
     passStreak: 0,
-    multiplier: 1,
+    // 开局倍数 = 配置值（默认 ×15），明牌/抢地主/加倍/炸弹/春天在此基础上再乘
+    multiplier: CONFIG.startMultiplier,
     bombCount: 0,
     playedEver: [false, false, false],
     landlordPlays: 0,
@@ -204,8 +206,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       s.moveLog.push({ seat: action.seat, type: 'ming' })
       return s
     }
-    // 出牌阶段：仅地主可明牌，明牌后手牌公开且倍数 ×2
-    if (s.phase === 'playing' && s.landlord === action.seat && s.current === action.seat) {
+    // 出牌阶段：仅地主可在第一轮出牌（自己还没出过牌）时明牌一次，明牌后手牌公开且倍数 ×2
+    if (s.phase === 'playing' && s.landlord === action.seat && s.current === action.seat && s.landlordPlays === 0) {
       if (s.revealed[action.seat]) throw new Error('already revealed')
       s.revealed[action.seat] = true
       s.multiplier *= 2

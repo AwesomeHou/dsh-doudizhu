@@ -18,6 +18,8 @@ export interface RankConfig {
 }
 
 export const CONFIG = {
+  /** 开局倍数：每局起始总倍数（明牌/抢地主/加倍/炸弹/春天在此基础上再乘） */
+  startMultiplier: 15,
   /** 每日签到 Token */
   dailyTokens: 2_000,
   /** 破产救济金 */

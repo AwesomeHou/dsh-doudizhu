@@ -393,8 +393,8 @@ export class Room {
   private stateFor(seat: Seat): GameStateForPlayer {
     const game = this.game!
     const meta = this.meta!
-    // 发牌/叫地主阶段尚未确定地主；抢/加倍/出牌阶段显示当前地主候选
-    const landlord = game.phase === 'dealing' || game.phase === 'calling' ? null : game.landlord
+    // 发牌/叫地主/抢地主阶段不显示地主与农民标，抢地主结束（加倍阶段起）才显示
+    const landlord = game.phase === 'dealing' || game.phase === 'calling' || game.phase === 'robbing' ? null : game.landlord
     const playing = game.phase === 'playing'
     return {
       phase: game.phase,
@@ -420,6 +420,7 @@ export class Room {
       lastActor: game.lastActor,
       multiplier: game.multiplier,
       bombCount: game.bombCount,
+      landlordPlays: game.landlordPlays,
       spring: game.spring,
       seats: meta.players.map((p) => {
         const s = this.seats[p.seat]

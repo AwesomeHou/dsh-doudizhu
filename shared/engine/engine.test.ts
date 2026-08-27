@@ -107,19 +107,20 @@ describe('发牌', () => {
     expect(g.current).toBe(g.callOrder[0])
   })
 
-  it('发牌期间明牌：第 1/2/3 轮明牌分别 ×4/×3/×2', () => {
+  it('发牌期间明牌：第 1/2/3 轮明牌分别 ×4/×3/×2（叠加在开局倍数 15 上）', () => {
     let g = createGame(rng(10))
+    expect(g.multiplier).toBe(15) // 开局倍数
     g = applyAction(g, { type: 'deal' }) // 第 1 轮
     g = applyAction(g, { type: 'ming', seat: 0 })
     expect(g.revealed[0]).toBe(true)
-    expect(g.multiplier).toBe(4)
+    expect(g.multiplier).toBe(60) // 15 ×4
     expect(g.moveLog.at(-1)?.type).toBe('ming')
     g = applyAction(g, { type: 'deal' }) // 第 2 轮
     g = applyAction(g, { type: 'ming', seat: 1 })
-    expect(g.multiplier).toBe(12) // ×4 × ×3
+    expect(g.multiplier).toBe(180) // 15 ×4 ×3
     g = applyAction(g, { type: 'deal' }) // 第 3 轮
     g = applyAction(g, { type: 'ming', seat: 2 })
-    expect(g.multiplier).toBe(24) // ×4 × ×3 × ×2
+    expect(g.multiplier).toBe(360) // 15 ×4 ×3 ×2
   })
 
   it('发牌未开始不能明牌；重复明牌被拒绝', () => {
@@ -309,11 +310,11 @@ describe('叫地主/抢地主/加倍', () => {
     expect(g.callMultiplier).toBe(1)
     // 抢地主顺序：下家、再下家、叫地主的人（最后）
     expect(g.robOrder).toEqual([next, last, caller])
-    // 下家抢 → 倍数翻倍
+    // 下家抢 → 倍数翻倍（开局 15 → 30）
     g = applyAction(g, { type: 'call', seat: next, call: true })
     expect(g.landlord).toBe(next)
     expect(g.callMultiplier).toBe(2)
-    expect(g.multiplier).toBe(2)
+    expect(g.multiplier).toBe(30)
     // 再下家不抢
     g = applyAction(g, { type: 'call', seat: last, call: false })
     // 回到叫地主的人：可以选择抢（抢回）或不抢
@@ -321,14 +322,14 @@ describe('叫地主/抢地主/加倍', () => {
     g = applyAction(g, { type: 'call', seat: caller, call: true })
     expect(g.landlord).toBe(caller)
     expect(g.callMultiplier).toBe(4)
-    expect(g.multiplier).toBe(4)
+    expect(g.multiplier).toBe(60)
     // 抢地主结束 → 加倍
     expect(g.phase).toBe('doubling')
     // 全部不加倍 → 出牌
     g = doubleAll()(g)
     expect(g.phase).toBe('playing')
     expect(g.current).toBe(g.landlord)
-    expect(g.multiplier).toBe(4)
+    expect(g.multiplier).toBe(60)
   })
 
   it('抢地主全部不抢：叫地主的人保持地主，倍数不变', () => {
@@ -338,7 +339,7 @@ describe('叫地主/抢地主/加倍', () => {
     g = robAll()(g)
     expect(g.phase).toBe('doubling')
     expect(g.landlord).toBe(caller)
-    expect(g.multiplier).toBe(1)
+    expect(g.multiplier).toBe(15) // 开局倍数，无任何加成
   })
 
   it('加倍：加倍 ×2、超级加倍 ×4，可叠加', () => {
@@ -349,11 +350,11 @@ describe('叫地主/抢地主/加倍', () => {
     expect(g.phase).toBe('doubling')
     expect(g.current).toBe(g.doublingOrder[0])
     g = applyAction(g, { type: 'double', seat: g.doublingOrder[0]!, choice: 1 }) // 加倍 ×2
-    expect(g.multiplier).toBe(2)
+    expect(g.multiplier).toBe(30) // 15 ×2
     g = applyAction(g, { type: 'double', seat: g.doublingOrder[1]!, choice: 2 }) // 超级加倍 ×4
-    expect(g.multiplier).toBe(8)
+    expect(g.multiplier).toBe(120) // 15 ×2 ×4
     g = applyAction(g, { type: 'double', seat: g.doublingOrder[2]!, choice: 0 }) // 不加倍
-    expect(g.multiplier).toBe(8)
+    expect(g.multiplier).toBe(120)
     expect(g.phase).toBe('playing')
   })
 
@@ -373,6 +374,25 @@ describe('叫地主/抢地主/加倍', () => {
     const farmer = ((landlord + 1) % 3) as 0 | 1 | 2
     expect(() => applyAction(g, { type: 'ming', seat: farmer })).toThrow()
     expect(() => applyAction(g, { type: 'ming', seat: landlord })).toThrow()
+  })
+
+  it('地主明牌仅限第一轮出牌：出过牌后（landlordPlays>0）不可再明牌', () => {
+    const g0 = dealAll(createGame(rng(14)))
+    const order = g0.callOrder
+    let g = applyAction(g0, { type: 'call', seat: order[0]!, call: true })
+    g = robAll()(g)
+    g = doubleAll()(g)
+    const landlord = g.landlord!
+    expect(g.landlordPlays).toBe(0)
+    // 第一轮出牌（不先明牌）：直接出一手对子
+    g.hands[landlord] = mk([12, 12, 5])
+    g.hands[(landlord + 1) % 3] = mk([0, 1])
+    g.hands[(landlord + 2) % 3] = mk([4, 5])
+    const s = applyAction(g, { type: 'play', seat: landlord, cards: mk([12, 12]) })
+    expect(s.landlordPlays).toBe(1)
+    // 地主再次轮到自己（landlordPlays=1）→ 不能明牌
+    s.current = landlord
+    expect(() => applyAction(s, { type: 'ming', seat: landlord })).toThrow()
   })
 })
 
@@ -428,7 +448,7 @@ describe('春天/反春与结算', () => {
     expect(s.finished).toBe(true)
     expect(s.winner).toBe('landlord')
     expect(s.spring).toBe('landlord')
-    expect(s.multiplier).toBe(2)
+    expect(s.multiplier).toBe(30) // 开局 15 × 春天 2
     const sum = s.settlement!.deltas.reduce((a, b) => a + b, 0)
     expect(sum + s.settlement!.rake).toBe(0)
   })
@@ -463,7 +483,7 @@ describe('春天/反春与结算', () => {
     expect(s.finished).toBe(true)
     expect(s.bombCount).toBe(1)
     expect(s.spring).toBe('none')
-    expect(s.multiplier).toBe(2) // 炸弹 ×2
+    expect(s.multiplier).toBe(30) // 开局 15 × 炸弹 2
   })
 })
 
@@ -548,51 +568,53 @@ describe('机器人出牌行为', () => {
   })
 })
 
-describe('完整对局模拟（机器人互打）', () => {
-  function playFullGame(seed: number): GameState {
-    const random = rng(seed)
-    let g = createGame(random)
-    let steps = 0
-    while (steps < 3000) {
-      steps++
-      if (g.redeal) {
-        g = createGame(random)
-        continue
-      }
-      if (g.finished) return g
-      if (g.phase === 'dealing') {
-        g = g.dealRound >= 3 ? applyAction(g, { type: 'start' }) : applyAction(g, { type: 'deal' })
-        continue
-      }
-      if (g.phase === 'calling') {
-        const seat = g.callOrder[g.callActor]!
-        const hand = g.hands[seat]!
-        g = applyAction(g, { type: 'call', seat, call: botCall(hand, random) })
-        continue
-      }
-      if (g.phase === 'robbing') {
-        const seat = g.robOrder[g.robActor]!
-        g = applyAction(g, { type: 'call', seat, call: botRob(g.hands[seat]!, random) })
-        continue
-      }
-      if (g.phase === 'doubling') {
-        const seat = g.doublingOrder[g.doublingActor]!
-        g = applyAction(g, { type: 'double', seat, choice: botDouble(g.hands[seat]!, random) })
-        continue
-      }
-      const seat = g.current
-      const move = botMove(g.hands[seat]!, g.lastPlay, {
-        mySeat: seat,
-        landlord: g.landlord,
-        lastActor: g.lastActor,
-        handsCount: g.hands.map((h) => h.length) as [number, number, number],
-      })
-      g = move === null
-        ? applyAction(g, { type: 'pass', seat })
-        : applyAction(g, { type: 'play', seat, cards: move })
+/** 完整对局模拟（机器人互打），模块级复用 */
+function playFullGame(seed: number): GameState {
+  const random = rng(seed)
+  let g = createGame(random)
+  let steps = 0
+  while (steps < 3000) {
+    steps++
+    if (g.redeal) {
+      g = createGame(random)
+      continue
     }
-    throw new Error('game did not finish in 3000 steps')
+    if (g.finished) return g
+    if (g.phase === 'dealing') {
+      g = g.dealRound >= 3 ? applyAction(g, { type: 'start' }) : applyAction(g, { type: 'deal' })
+      continue
+    }
+    if (g.phase === 'calling') {
+      const seat = g.callOrder[g.callActor]!
+      const hand = g.hands[seat]!
+      g = applyAction(g, { type: 'call', seat, call: botCall(hand, random) })
+      continue
+    }
+    if (g.phase === 'robbing') {
+      const seat = g.robOrder[g.robActor]!
+      g = applyAction(g, { type: 'call', seat, call: botRob(g.hands[seat]!, random) })
+      continue
+    }
+    if (g.phase === 'doubling') {
+      const seat = g.doublingOrder[g.doublingActor]!
+      g = applyAction(g, { type: 'double', seat, choice: botDouble(g.hands[seat]!, random) })
+      continue
+    }
+    const seat = g.current
+    const move = botMove(g.hands[seat]!, g.lastPlay, {
+      mySeat: seat,
+      landlord: g.landlord,
+      lastActor: g.lastActor,
+      handsCount: g.hands.map((h) => h.length) as [number, number, number],
+    })
+    g = move === null
+      ? applyAction(g, { type: 'pass', seat })
+      : applyAction(g, { type: 'play', seat, cards: move })
   }
+  throw new Error('game did not finish in 3000 steps')
+}
+
+describe('完整对局模拟（机器人互打）', () => {
 
   it('20 局全部正常打完，账目守恒', () => {
     for (let seed = 1; seed <= 20; seed++) {
@@ -605,6 +627,56 @@ describe('完整对局模拟（机器人互打）', () => {
       // 胜者阵营正确
       const landlordRole = g.winner === 'landlord'
       expect(landlordRole ? g.landlord! >= 0 : true).toBe(true)
+    }
+  })
+})
+
+describe('结算链路审计（倍数 × 底分 → 扣钱/赢钱）', () => {
+  it('地主赢：每农民扣 stake=底分×倍数，地主得 2×stake 扣抽水（账目守恒）', () => {
+    const s = settle(1, 'landlord', 15, 60, 0.05, [5000, 5000, 5000])
+    // 理论 stake = 15×60 = 900；本金充足不封顶
+    expect(s.stake).toBe(900)
+    expect(s.deltas[0]).toBe(-900)
+    expect(s.deltas[2]).toBe(-900)
+    expect(s.deltas[1]).toBe(1800 - Math.floor(1800 * 0.05))
+    expect(s.deltas.reduce((a, b) => a + b, 0) + s.rake).toBe(0)
+  })
+
+  it('农民赢：地主扣 2×stake，各农民得 stake 扣抽水（账目守恒）', () => {
+    const s = settle(1, 'farmer', 80, 30, 0.05, [10000, 10000, 10000])
+    expect(s.stake).toBe(2400) // 80 × 30
+    expect(s.deltas[1]).toBe(-4800)
+    expect(s.deltas[0]).toBe(Math.floor(2400 * 0.95))
+    expect(s.deltas[2]).toBe(Math.floor(2400 * 0.95))
+    expect(s.deltas.reduce((a, b) => a + b, 0) + s.rake).toBe(0)
+  })
+
+  it('封顶生效：赢家所得被压到不超过本金，且无人输超本金', () => {
+    // 新手场 底分 15 × 100 倍 = 1500；农民(1)本金仅 1000 → 封顶到 1000
+    const s = settle(0, 'farmer', 15, 100, 0.05, [4000, 1000, 3000])
+    expect(s.stake).toBe(1000)
+    expect(s.deltas[1]).toBe(950)     // 赢家(1)所得 ≤ 本金 1000
+    expect(s.deltas[2]).toBe(950)
+    expect(s.deltas[0]).toBe(-2000)   // 地主输 2×1000 ≤ 本金 4000
+    expect(s.deltas.reduce((a, b) => a + b, 0) + s.rake).toBe(0)
+  })
+
+  it('完整对局：真实底分 + 开局余额结算，守恒且无负数', () => {
+    for (const seed of [1, 5, 9, 20]) {
+      const g = playFullGame(seed)
+      expect(g.finished).toBe(true)
+      const capitals: [number, number, number] = [1200, 900, 1500] // 开局余额
+      const s = settle(g.landlord!, g.winner!, 15, g.multiplier, 0.05, capitals)
+      // 账目守恒
+      expect(s.deltas.reduce((a, b) => a + b, 0) + s.rake).toBe(0)
+      // 赢家所得不超过其本金
+      const winnerSeat = g.winner === 'landlord' ? g.landlord! : ([0, 1, 2] as Seat[]).find((x) => x !== g.landlord)!
+      expect(s.deltas[winnerSeat]).toBeGreaterThanOrEqual(-capitals[winnerSeat]!)
+      expect(s.deltas[winnerSeat]).toBeLessThanOrEqual(capitals[winnerSeat]!)
+      // 无人输超本金
+      for (let i = 0; i < 3; i++) {
+        expect(s.deltas[i]!).toBeGreaterThanOrEqual(-capitals[i]!)
+      }
     }
   })
 })

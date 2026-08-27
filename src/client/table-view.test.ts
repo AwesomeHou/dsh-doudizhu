@@ -31,16 +31,17 @@ describe('牌桌视图的阶段状态', () => {
     expect(view.seats.every((seat) => seat.role === null)).toBe(true)
   })
 
-  it('抢地主阶段：显示当前地主候选，但仍不揭示底牌', () => {
+  it('抢地主阶段：不显示地主/农民标，也不揭示底牌', () => {
     const initial = dealAll(createGame(() => 0.1))
     const firstCaller = initial.callOrder[0]!
     const state = applyAction(initial, { type: 'call', seat: firstCaller, call: true })
     const view = tableViewFromEngine(state, 0, SEAT_META)
 
     expect(view.phase).toBe('robbing')
-    expect(view.landlord).toBe(firstCaller)
+    expect(view.landlord).toBeNull() // 抢地主结束（加倍阶段起）才显示地主
     expect(view.hasCalled).toBe(true)
     expect(view.bottom).toEqual([]) // 底牌未揭示
+    expect(view.seats.every((seat) => seat.role === null)).toBe(true)
   })
 
   it('进入出牌阶段后才显示最终地主和底牌', () => {

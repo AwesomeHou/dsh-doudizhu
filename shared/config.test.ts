@@ -10,6 +10,10 @@ describe('经济数值（v0.3.0 调整）', () => {
     expect(CONFIG.rescueTokens).toBe(2_000)
   })
 
+  it('开局倍数为 15', () => {
+    expect(CONFIG.startMultiplier).toBe(15)
+  })
+
   it('桌别：新手场 15 / 普通场 80 / 高级场 480，门槛递增', () => {
     const [novice, normal, high] = CONFIG.tables
     expect(novice.base).toBe(15)

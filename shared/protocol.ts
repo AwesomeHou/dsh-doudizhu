@@ -67,6 +67,8 @@ export interface GameStateForPlayer {
   lastActor: number | null
   multiplier: number
   bombCount: number
+  /** 地主已出牌组数（=0 时地主可明牌，即第一轮出牌） */
+  landlordPlays: number
   spring: 'none' | 'landlord' | 'farmer'
   /** 每座：手牌数、角色、昵称等；明牌座位的完整手牌在 hand 中下发 */
   seats: Array<{

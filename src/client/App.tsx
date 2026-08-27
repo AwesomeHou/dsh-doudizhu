@@ -103,12 +103,12 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 .ddz-card-rank{font-size:18px;letter-spacing:-.04em}
 .ddz-card-rank.long{font-size:15px;letter-spacing:-.08em}
 .ddz-card-suit{font-size:13px;line-height:1}
-/* 大王/小王：JOKER 英文竖排（只保留中央一列，字号收缩以完整落在牌面内），大王红、小王黑 */
-.ddz-joker-card{justify-content:center;align-items:center}
-.ddz-joker-main{display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:900;line-height:1;font-size:10px;letter-spacing:.02em}
-.ddz-joker-letter{display:block;line-height:1}
+/* 大王/小王：JOKER 英文竖排（靠左、字母紧凑不分散），大王红、小王黑 */
+.ddz-joker-card{justify-content:flex-start;align-items:flex-start;padding:6px}
+.ddz-joker-main{display:flex;flex-direction:column;align-items:center;gap:0;font-weight:900;line-height:.92;font-size:10px;letter-spacing:0}
+.ddz-joker-letter{display:block;line-height:.92}
 .ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:13px}
-.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:6px;gap:1px}
+.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:6px}
 /* 自己的手牌放大 */
 .ddz-card-big{width:56px;height:80px;border-radius:9px;font-size:24px}
 .ddz-card-big .ddz-card-rank{font-size:22px}
@@ -310,7 +310,7 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 @keyframes ddz-action-ready{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes ddz-turn-pulse{0%,100%{box-shadow:0 2px 6px rgba(26,32,47,.08)}50%{box-shadow:0 0 0 3px rgba(77,107,254,.12),0 3px 8px rgba(77,107,254,.16)}}
 @keyframes ddz-countdown-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
- @media (max-width:720px){.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-big{width:46px;height:66px;font-size:20px}.ddz-card-big .ddz-card-rank{font-size:18px}.ddz-card-big .ddz-card-rank.long{font-size:15px}.ddz-card-big .ddz-card-suit{font-size:13px}.ddz-card-big .ddz-card-corner.top{top:5px;left:5px}.ddz-card-big .ddz-card-corner.bottom{right:5px;bottom:5px}.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:11px}.ddz-card-mini{width:22px;height:32px;font-size:11px}.ddz-card-mini .ddz-card-rank{font-size:10px}.ddz-card-mini .ddz-card-rank.long{font-size:8px}.ddz-card-mini .ddz-card-suit{font-size:8px}.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:5px;gap:1px}.ddz-human-hand .ddz-card-stack-item:not(:first-child){margin-left:-25px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}}
+ @media (max-width:720px){.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-big{width:46px;height:66px;font-size:20px}.ddz-card-big .ddz-card-rank{font-size:18px}.ddz-card-big .ddz-card-rank.long{font-size:15px}.ddz-card-big .ddz-card-suit{font-size:13px}.ddz-card-big .ddz-card-corner.top{top:5px;left:5px}.ddz-card-big .ddz-card-corner.bottom{right:5px;bottom:5px}.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:11px}.ddz-card-mini{width:22px;height:32px;font-size:11px}.ddz-card-mini .ddz-card-rank{font-size:10px}.ddz-card-mini .ddz-card-rank.long{font-size:8px}.ddz-card-mini .ddz-card-suit{font-size:8px}.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:5px}.ddz-human-hand .ddz-card-stack-item:not(:first-child){margin-left:-25px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}}
  @media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-sidebar-entry,.ddz-card{transition:none}.ddz-card:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-pip-window,.ddz-modal,.ddz-toast,.ddz-avatar-picker,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent,.ddz-special-play,.ddz-special-label,.ddz-hand-arranging .ddz-hand-card{animation:none!important}}
 `
 
@@ -795,7 +795,7 @@ function GameTableShell(props: {
                   : (view.phase === 'playing'
                       ? (isMyTurn
                           ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
-                              view.landlord === view.mySeat && !view.revealed[view.mySeat]
+                              view.landlord === view.mySeat && !view.revealed[view.mySeat] && view.landlordPlays === 0
                                 && createElement('button', { className: 'ddz-btn ddz-btn-red', onClick: () => { onMing(); showAction(view.mySeat, '明牌') } }, '明牌'),
                               createElement('button', { className: 'ddz-btn', disabled: !canPlaySelected(), onClick: onPlay }, '出牌'),
                               createElement('div', { className: 'ddz-action-hint' },

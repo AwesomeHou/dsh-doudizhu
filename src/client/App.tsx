@@ -138,6 +138,9 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 /* 超级加倍按钮 */
 .ddz-btn-gold{background:var(--dz-gold)}
 .ddz-btn-gold:hover{background:#7d540f}
+/* 直接进入机器人对局按钮 */
+.ddz-btn-bot{background:#2f9e62}
+.ddz-btn-bot:hover{background:#26834f}
 .ddz-card-back{cursor:default;background:#f3f5fa;color:transparent}
 .ddz-card-back:hover{transform:none;box-shadow:0 1px 3px rgba(26,32,47,.12)}
 .ddz-card-back img{width:72%;height:72%;object-fit:contain;opacity:.78}
@@ -1102,8 +1105,8 @@ function Lobby(props: {
           }, '开始匹配'),
       createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onClose }, '最小化'),
     ),
-    matching && createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', marginTop: 10 } },
-      createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onStartBot }, '直接进入机器人对局'),
+    matching && createElement('div', { className: 'ddz-row', style: { marginTop: 10, justifyContent: 'flex-start' } },
+      createElement('button', { className: 'ddz-btn ddz-btn-bot', onClick: onStartBot }, '直接进入机器人对局'),
     ),
     entryIssue === 'low' &&
       createElement('div', { className: 'ddz-dim ddz-helper' },

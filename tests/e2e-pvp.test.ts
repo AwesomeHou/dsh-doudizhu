@@ -73,7 +73,12 @@ function actOnState(client: { ws: WebSocket; seat: number }, s: Record<string, u
     const last = (s.lastPlayCards && (s.lastPlayCards as Card[]).length > 0)
       ? classify(s.lastPlayCards as Card[]) as Play
       : null
-    const move = botMove(s.hand as Card[], last)
+    const move = botMove(s.hand as Card[], last, {
+      mySeat: client.seat as 0 | 1 | 2,
+      landlord: s.landlord as 0 | 1 | 2 | null,
+      lastActor: s.lastActor as 0 | 1 | 2 | null,
+      handsCount: (s.seats as Array<{ count: number }>).map((x) => x.count) as [number, number, number],
+    })
     client.ws.send(move === null
       ? JSON.stringify({ v: PROTOCOL_VERSION, t: 'pass', d: {} })
       : JSON.stringify({ v: PROTOCOL_VERSION, t: 'play', d: { cards: move } }))

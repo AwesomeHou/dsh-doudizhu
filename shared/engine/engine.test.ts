@@ -8,7 +8,7 @@ import { deal, dealInRounds, newDeck } from './deck.ts'
 import { applyAction, createGame, finalize, isLegalPlay, mingFactor, type GameState } from './game.ts'
 import { settle } from './scoring.ts'
 import { buildPlay, classify, hintPlay, legalPlays } from './valid.ts'
-import type { Card } from './types.ts'
+import type { Card, Seat } from './types.ts'
 
 /** 构造一张牌：r=点数(0..14)，s=花色(0..3) */
 function c(r: number, s = 0): Card {
@@ -467,6 +467,87 @@ describe('春天/反春与结算', () => {
   })
 })
 
+describe('每场封顶（赢家所得不超过其本金）', () => {
+  it('地主赢：所得不超过地主本金（2×stake ≤ 地主开局余额）', () => {
+    // base 480 × 100 倍 = 48000，但地主(1)本金 20000 → 封顶 stake = min(48000, 10000, 5000, 8000) = 5000
+    const s = settle(1, 'landlord', 480, 100, 0.05, [5000, 20000, 8000])
+    expect(s.stake).toBe(5000)
+    expect(s.deltas[0]).toBe(-5000)
+    expect(s.deltas[2]).toBe(-5000)
+    expect(s.deltas[1]).toBe(2 * 5000 - Math.floor(2 * 5000 * 0.05))
+    const sum = s.deltas.reduce((a, b) => a + b, 0)
+    expect(sum + s.rake).toBe(0)
+    // 赢家所得(9500) 不超过自己的本金(20000)
+    expect(s.deltas[1]).toBeLessThanOrEqual(20000)
+  })
+
+  it('农民赢：各农民所得不超过其本金，地主也不会输超本金', () => {
+    // base 15 × 64 = 960，农民(1)本金 500、农民(2)本金 600 → 封顶 stake = min(960, 1500, 500, 600) = 500
+    const s = settle(0, 'farmer', 15, 64, 0.05, [3000, 500, 600])
+    expect(s.stake).toBe(500)
+    expect(s.deltas[1]).toBe(Math.floor(500 * 0.95))
+    expect(s.deltas[2]).toBe(Math.floor(500 * 0.95))
+    expect(s.deltas[0]).toBe(-1000) // 地主输 2×500，不超过本金 3000
+    const sum = s.deltas.reduce((a, b) => a + b, 0)
+    expect(sum + s.rake).toBe(0)
+  })
+
+  it('本金充足时封顶不生效', () => {
+    const s = settle(0, 'landlord', 80, 8, 0.05, [10000, 10000, 10000])
+    expect(s.stake).toBe(640)
+    expect(s.deltas[1]).toBe(-640)
+    expect(s.deltas[2]).toBe(-640)
+    expect(s.deltas[0]).toBe(1280 - Math.floor(1280 * 0.05))
+  })
+
+  it('不传本金时保持原逻辑（不加封顶）', () => {
+    const s = settle(0, 'landlord', 80, 8, 0.05)
+    expect(s.stake).toBe(640)
+    expect(s.deltas[1]).toBe(-640)
+  })
+})
+
+describe('机器人出牌行为', () => {
+  it('农民队友领出且还有牌 → 不压队友（让队友继续）', () => {
+    const hand = mk([9, 10, 11, 12])
+    const last = { kind: 'single', rank: 5, length: 1 } as const
+    const ctx = { mySeat: 2 as Seat, landlord: 0 as Seat, lastActor: 1 as Seat, handsCount: [10, 8, 4] as [number, number, number] }
+    expect(botMove(hand, last, ctx)).toBeNull()
+  })
+
+  it('队友领出但自己可一手走完 → 直接打完', () => {
+    const hand = mk([12, 12]) // 对2，能一手压过对A
+    const last = { kind: 'pair', rank: 11, length: 2 } as const
+    const ctx = { mySeat: 2 as Seat, landlord: 0 as Seat, lastActor: 1 as Seat, handsCount: [10, 8, 2] as [number, number, number] }
+    const move = botMove(hand, last, ctx)
+    expect(move?.length).toBe(2)
+  })
+
+  it('领出时整手就是一个合法牌型 → 直接走完', () => {
+    const hand = mk([8, 8, 8, 9, 9, 9]) // 飞机 888999
+    expect(botMove(hand, null, null)?.length).toBe(6)
+  })
+
+  it('对手只剩 2 张且只能靠炸弹压住时 → 用炸弹拦住', () => {
+    const hand = mk([7, 7, 7, 7, 12, 13, 14]) // 含炸弹
+    const last = { kind: 'pair', rank: 12, length: 2 } as const // 对2，只有炸弹/王炸能压
+    const ctx = { mySeat: 1 as Seat, landlord: 0 as Seat, lastActor: 0 as Seat, handsCount: [2, 7, 9] as [number, number, number] }
+    const move = botMove(hand, last, ctx)
+    const kind = move ? classify(move)?.kind : null
+    expect(kind).toBe('bomb')
+  })
+
+  it('非必要时不轻易用炸弹（对手牌还多）', () => {
+    const hand = mk([7, 7, 7, 7, 12, 13, 14])
+    const last = { kind: 'single', rank: 11, length: 1 } as const
+    const ctx = { mySeat: 1 as Seat, landlord: 0 as Seat, lastActor: 0 as Seat, handsCount: [9, 7, 9] as [number, number, number] }
+    // 对手还很多牌 → 用单牌压制即可，不甩炸弹
+    const move = botMove(hand, last, ctx)
+    const kind = move ? classify(move)?.kind : null
+    expect(kind).not.toBe('bomb')
+  })
+})
+
 describe('完整对局模拟（机器人互打）', () => {
   function playFullGame(seed: number): GameState {
     const random = rng(seed)
@@ -500,7 +581,12 @@ describe('完整对局模拟（机器人互打）', () => {
         continue
       }
       const seat = g.current
-      const move = botMove(g.hands[seat]!, g.lastPlay)
+      const move = botMove(g.hands[seat]!, g.lastPlay, {
+        mySeat: seat,
+        landlord: g.landlord,
+        lastActor: g.lastActor,
+        handsCount: g.hands.map((h) => h.length) as [number, number, number],
+      })
       g = move === null
         ? applyAction(g, { type: 'pass', seat })
         : applyAction(g, { type: 'play', seat, cards: move })

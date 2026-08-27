@@ -310,7 +310,12 @@ export class Room {
         if (this.game.landlord === seat && !this.game.revealed[seat] && this.game.landlordPlays === 0 && Math.random() < 0.5) {
           this.game = applyAction(this.game, { type: 'ming', seat })
         } else {
-          const move = botMove(this.game.hands[seat]!, this.game.lastPlay)
+          const move = botMove(this.game.hands[seat]!, this.game.lastPlay, {
+            mySeat: seat,
+            landlord: this.game.landlord,
+            lastActor: this.game.lastActor,
+            handsCount: this.game.hands.map((h) => h.length) as [number, number, number],
+          })
           this.game = move === null
             ? applyAction(this.game, { type: 'pass', seat })
             : applyAction(this.game, { type: 'play', seat, cards: move })
@@ -337,7 +342,9 @@ export class Room {
     this.clearTimer()
     const game = this.game!
     const meta = this.meta!
-    const s = settle(game.landlord!, game.winner!, meta.base, game.multiplier, CONFIG.rakeRate)
+    // 每场封顶：赢家所得不超过其本金（开局余额），且无人输超本金
+    const capitals: [number, number, number] = [0, 1, 2].map((i) => this.seats[i]?.tokenBalance ?? 0) as [number, number, number]
+    const s = settle(game.landlord!, game.winner!, meta.base, game.multiplier, CONFIG.rakeRate, capitals)
 
     // 服务端权威落账
     const balances: Record<string, number> = {}

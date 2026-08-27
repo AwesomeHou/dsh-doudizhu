@@ -19,9 +19,11 @@ export interface Settlement {
 /**
  * @param landlord 地主座位
  * @param winner 赢家阵营
- * @param base 桌别底注
- * @param multiplier 总倍数（抢地主 × 炸弹 × 春天）
+ * @param base 桌别底分
+ * @param multiplier 总倍数（明牌 × 抢地主 × 加倍 × 炸弹 × 春天）
  * @param rakeRate 抽水率（0~1），默认 5%
+ * @param capitals 每座开局余额（可选）：传入后按“每场封顶”规则收缩 stake——
+ *   赢家所得不超过它自己的本金（开局余额），同时保证任何一方都不会输超本金。
  */
 export function settle(
   landlord: Seat,
@@ -29,8 +31,20 @@ export function settle(
   base: number,
   multiplier: number,
   rakeRate = 0.05,
+  capitals?: [number, number, number],
 ): Settlement {
-  const stake = base * multiplier
+  let stake = base * multiplier
+  if (capitals) {
+    // 地主侧单方金额为 2×stake，农民侧为 stake：
+    // 封顶 = min(原始 stake, 地主本金/2, 农民1本金, 农民2本金)
+    const farmers: Seat[] = ([0, 1, 2] as Seat[]).filter((s) => s !== landlord)
+    const cap = Math.min(
+      stake,
+      Math.floor(capitals[landlord]! / 2),
+      ...farmers.map((f) => capitals[f]!),
+    )
+    stake = Math.max(0, cap)
+  }
   const deltas: [number, number, number] = [0, 0, 0]
   const farmers: Seat[] = ([0, 1, 2] as Seat[]).filter((s) => s !== landlord)
   let rake = 0

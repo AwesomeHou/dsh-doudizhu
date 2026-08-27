@@ -5,7 +5,7 @@
  * - 断线/超时托管：当前玩家无连接或 25s 超时 → 引擎自动出牌
  * - 结算：写 D1 流水/对局记录 → 广播 settle → 清理房间 KV
  */
-import { botCall, botMove } from '../../shared/engine/bot.ts'
+import { botCall, botDouble, botMove, botRob } from '../../shared/engine/bot.ts'
 import { applyAction, createGame, roleOf, type GameState } from '../../shared/engine/game.ts'
 import type { Card, Seat } from '../../shared/engine/types.ts'
 import { settle } from '../../shared/engine/scoring.ts'
@@ -29,6 +29,10 @@ interface SeatState {
 
 const TURN_MS = CONFIG.turnTimeoutMs
 const AUTO_DISCONNECT_MS = 8_000
+/** 加倍环节每人限时 5s */
+const DOUBLE_MS = 5_000
+/** 发牌：每轮间隔（3 轮共约 3.6s） */
+const DEAL_INTERVAL_MS = 1_200
 
 export class Room {
   private env: Env
@@ -55,6 +59,10 @@ export class Room {
         redeal: this.game?.redeal ?? false,
         landlord: this.game?.landlord ?? null,
         callActor: this.game?.callActor ?? null,
+        robActor: this.game?.robActor ?? null,
+        doublingActor: this.game?.doublingActor ?? null,
+        dealRound: this.game?.dealRound ?? null,
+        revealed: this.game?.revealed ?? null,
         multiplier: this.game?.multiplier ?? null,
         seats: this.seats.map((s) => s ? { uid: s.uid.slice(0, 8), connected: s.connected } : null),
         metaId: this.meta?.id ?? null,
@@ -178,7 +186,7 @@ export class Room {
     try {
       msg = JSON.parse(raw) as ClientMsg
     } catch {
-      this.send(seat, { v: 1, t: 'error', d: { message: 'bad message' } })
+      this.send(seat, { v: PROTOCOL_VERSION, t: 'error', d: { message: 'bad message' } })
       return
     }
     if (msg.v !== PROTOCOL_VERSION) return
@@ -192,6 +200,12 @@ export class Room {
       switch (msg.t) {
         case 'call':
           this.game = applyAction(this.game, { type: 'call', seat, call: Boolean((msg.d as { call: boolean }).call) })
+          break
+        case 'double':
+          this.game = applyAction(this.game, { type: 'double', seat, choice: (msg.d as { choice: number }).choice as 0 | 1 | 2 })
+          break
+        case 'ming':
+          this.game = applyAction(this.game, { type: 'ming', seat })
           break
         case 'play': {
           const cards = (msg.d as { cards: WireCard[] }).cards
@@ -210,7 +224,7 @@ export class Room {
       }
     } catch (err) {
       console.log(`[room] reject ${msg.t} from seat ${seat}:`, err instanceof Error ? err.message : err)
-      this.send(seat, { v: 1, t: 'error', d: { message: err instanceof Error ? err.message : 'invalid move' } })
+      this.send(seat, { v: PROTOCOL_VERSION, t: 'error', d: { message: err instanceof Error ? err.message : 'invalid move' } })
       return
     }
 
@@ -220,6 +234,8 @@ export class Room {
     }
     await this.state.storage.put('game', this.game)
     if (this.game.finished) {
+      // 先广播最后一手的最终局面，再进入结算（客户端看到最后一手后约 1s 弹出结算）
+      this.broadcastState()
       await this.finish()
       return
     }
@@ -231,8 +247,8 @@ export class Room {
     const s = this.seats[seat]
     if (s) s.connected = false
     this.broadcastState()
-    // 轮到自己但断线 → 尽快托管
-    if (this.game && !this.game.finished && this.game.current === seat) {
+    // 轮到自己但断线 → 尽快托管（发牌阶段由服务端定时推进，不托管）
+    if (this.game && !this.game.finished && this.game.phase !== 'dealing' && this.game.current === seat) {
       this.clearTimer()
       this.turnTimer = setTimeout(() => void this.autoAct(seat), AUTO_DISCONNECT_MS)
     }
@@ -241,30 +257,64 @@ export class Room {
   private startTurnTimer(): void {
     this.clearTimer()
     if (!this.game || this.game.finished || this.game.phase === 'settled') return
+    // 发牌阶段：按固定节奏自动推进（3 轮）
+    if (this.game.phase === 'dealing') {
+      this.turnTimer = setTimeout(() => void this.advanceDeal(), DEAL_INTERVAL_MS)
+      return
+    }
     const seat = this.game.current
     const s = this.seats[seat]
     let delay: number
     if (s?.isBot) {
-      // 机器人模仿真人思考节奏：叫地主稍慢，出牌 0.9–2.5s 随机
-      delay = this.game.phase === 'calling' ? 1400 + Math.random() * 1200 : 900 + Math.random() * 1600
+      // 机器人模仿真人思考节奏：叫/抢稍慢，出牌 0.9–2.5s 随机，加倍 0.9–1.7s
+      if (this.game.phase === 'calling' || this.game.phase === 'robbing') delay = 1400 + Math.random() * 1200
+      else if (this.game.phase === 'doubling') delay = 900 + Math.random() * 800
+      else delay = 900 + Math.random() * 1600
     } else {
       const connected = s?.connected ?? false
-      delay = connected ? TURN_MS : AUTO_DISCONNECT_MS
+      delay = this.game.phase === 'doubling' ? DOUBLE_MS : connected ? TURN_MS : AUTO_DISCONNECT_MS
     }
     this.turnTimer = setTimeout(() => void this.autoAct(seat), delay)
   }
 
+  /** 发牌阶段推进一轮（服务端定时驱动）：3 轮发完后再进入叫地主 */
+  private async advanceDeal(): Promise<void> {
+    if (!this.game || this.game.phase !== 'dealing' || this.game.finished) return
+    try {
+      this.game = this.game.dealRound >= 3
+        ? applyAction(this.game, { type: 'start' })
+        : applyAction(this.game, { type: 'deal' })
+    } catch {
+      return
+    }
+    await this.state.storage.put('game', this.game)
+    this.broadcastState()
+    // 若仍在发牌则继续推进；进入 calling 后由 startTurnTimer 进入回合制
+    this.startTurnTimer()
+  }
+
   private async autoAct(seat: Seat): Promise<void> {
-    if (!this.game || this.game.finished || this.game.current !== seat) return
+    if (!this.game || this.game.finished || this.game.phase === 'dealing' || this.game.current !== seat) return
     try {
       if (this.game.phase === 'calling') {
         const call = botCall(this.game.hands[seat]!)
         this.game = applyAction(this.game, { type: 'call', seat, call })
+      } else if (this.game.phase === 'robbing') {
+        const rob = botRob(this.game.hands[seat]!)
+        this.game = applyAction(this.game, { type: 'call', seat, call: rob })
+      } else if (this.game.phase === 'doubling') {
+        const choice = botDouble(this.game.hands[seat]!)
+        this.game = applyAction(this.game, { type: 'double', seat, choice })
       } else {
-        const move = botMove(this.game.hands[seat]!, this.game.lastPlay)
-        this.game = move === null
-          ? applyAction(this.game, { type: 'pass', seat })
-          : applyAction(this.game, { type: 'play', seat, cards: move })
+        // 出牌阶段：地主机器人有一定概率明牌（明牌后手牌公开、倍数 ×2，再正常出牌）
+        if (this.game.landlord === seat && !this.game.revealed[seat] && this.game.landlordPlays === 0 && Math.random() < 0.5) {
+          this.game = applyAction(this.game, { type: 'ming', seat })
+        } else {
+          const move = botMove(this.game.hands[seat]!, this.game.lastPlay)
+          this.game = move === null
+            ? applyAction(this.game, { type: 'pass', seat })
+            : applyAction(this.game, { type: 'play', seat, cards: move })
+        }
       }
     } catch {
       return
@@ -272,6 +322,8 @@ export class Room {
     if (this.game.redeal) this.game = createGame()
     await this.state.storage.put('game', this.game)
     if (this.game.finished) {
+      // 先广播最后一手，再进入结算
+      this.broadcastState()
       await this.finish()
       return
     }
@@ -320,7 +372,7 @@ export class Room {
       if (!st || !st.ws) continue
       const uid = st.uid
       const msg: ServerMsg = {
-        v: 1, t: 'settle',
+        v: PROTOCOL_VERSION, t: 'settle',
         d: {
           winner: game.winner!, spring: springText, multiplier: game.multiplier, rake: s.rake,
           myDelta: s.deltas[i], balance: st.tokenBalance, balance_after: balances[uid] ?? st.tokenBalance + s.deltas[i],
@@ -334,19 +386,29 @@ export class Room {
   private stateFor(seat: Seat): GameStateForPlayer {
     const game = this.game!
     const meta = this.meta!
-    // 叫地主阶段的 landlord 只是当前最高叫分者，只有进入出牌阶段才正式确定。
-    const landlord = game.phase === 'calling' ? null : game.landlord
+    // 发牌/叫地主阶段尚未确定地主；抢/加倍/出牌阶段显示当前地主候选
+    const landlord = game.phase === 'dealing' || game.phase === 'calling' ? null : game.landlord
+    const playing = game.phase === 'playing'
     return {
       phase: game.phase,
       seat,
       hand: game.hands[seat]!.map((c) => ({ r: c.r, s: c.s })),
-      bottom: landlord === null ? [] : game.bottom.map((c) => ({ r: c.r, s: c.s })),
+      // 底牌只在出牌阶段揭示（发/叫/抢/加倍期间保持三张牌背）
+      bottom: playing ? game.bottom.map((c) => ({ r: c.r, s: c.s })) : [],
       landlord,
       hasCalled: game.landlord !== null,
       current: game.current,
       callOrder: game.callOrder,
       callActor: game.callActor,
       callMultiplier: game.callMultiplier,
+      callerSeat: game.callerSeat,
+      robOrder: game.robOrder,
+      robActor: game.robActor,
+      doublingOrder: game.doublingOrder,
+      doublingActor: game.doublingActor,
+      doubled: [...game.doubled],
+      revealed: [...game.revealed],
+      dealRound: game.dealRound,
       lastPlayCards: game.lastPlayCards ? game.lastPlayCards.map((c) => ({ r: c.r, s: c.s })) : null,
       lastActor: game.lastActor,
       multiplier: game.multiplier,
@@ -354,16 +416,19 @@ export class Room {
       spring: game.spring,
       seats: meta.players.map((p) => {
         const s = this.seats[p.seat]
+        const revealed = game.revealed[p.seat]
         return {
           seat: p.seat, uid: p.uid, nickname: p.nickname, avatarId: p.avatarId,
           count: game.hands[p.seat]!.length,
           role: landlord === null ? null : roleOf(game, p.seat),
           connected: s?.connected ?? false,
           tokenBalance: p.tokenBalance,
+          // 明牌座位的完整手牌对所有人公开
+          hand: revealed ? game.hands[p.seat]!.map((c) => ({ r: c.r, s: c.s })) : null,
         }
       }),
       turnStartedAt: Date.now(),
-      turnTimeoutMs: TURN_MS,
+      turnTimeoutMs: game.phase === 'doubling' ? DOUBLE_MS : TURN_MS,
       finished: game.finished,
       winner: game.winner,
     }
@@ -374,7 +439,7 @@ export class Room {
     for (let i = 0; i < 3; i++) {
       const s = this.seats[i]
       if (s?.ws && s.connected) {
-        this.send(i as Seat, { v: 1, t: 'state', d: this.stateFor(i as Seat) })
+        this.send(i as Seat, { v: PROTOCOL_VERSION, t: 'state', d: this.stateFor(i as Seat) })
       }
     }
   }

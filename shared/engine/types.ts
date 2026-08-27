@@ -69,5 +69,13 @@ export type Seat = 0 | 1 | 2
 /** 玩家身份 */
 export type Role = 'landlord' | 'farmer'
 
-/** 对局阶段 */
-export type Phase = 'calling' | 'playing' | 'settled'
+/**
+ * 对局阶段：
+ * - dealing  发牌（分 3 轮，顺序入牌；所有人可在期间明牌，×4/×3/×2）
+ * - calling  叫地主（3 人轮流叫/不叫，首个叫者成为“叫地主的人”）
+ * - robbing  抢地主（其余两家依次抢/不抢，最后回到叫地主的人再决定抢/不抢，每次抢 ×2）
+ * - doubling 加倍（每人 加倍×2 / 超级加倍×4 / 不加倍，限时 5s）
+ * - playing  出牌（地主可在自己回合选择明牌，明牌后手牌对所有人公开且倍数 ×2）
+ * - settled  已结算
+ */
+export type Phase = 'dealing' | 'calling' | 'robbing' | 'doubling' | 'playing' | 'settled'

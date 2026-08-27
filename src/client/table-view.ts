@@ -5,7 +5,7 @@
  */
 import type { GameState } from '../../shared/engine/game.ts'
 import type { GameStateForPlayer } from '../../shared/protocol.ts'
-import type { Card, Seat } from '../../shared/engine/types.ts'
+import type { Card, Phase, Seat } from '../../shared/engine/types.ts'
 
 export interface SeatView {
   seat: Seat
@@ -16,10 +16,12 @@ export interface SeatView {
   connected: boolean
   tokenBalance: number
   isHuman: boolean
+  /** 明牌座位下发的完整手牌（否则 undefined） */
+  hand?: Card[]
 }
 
 export interface TableView {
-  phase: 'calling' | 'playing' | 'settled'
+  phase: Phase
   mySeat: Seat
   myHand: Card[]
   bottom: Card[]
@@ -29,6 +31,18 @@ export interface TableView {
   callOrder: Seat[]
   callActor: number
   callMultiplier: number
+  /** 首个叫地主的人（抢地主最后回到他那里再选择） */
+  callerSeat: Seat | null
+  robOrder: Seat[]
+  robActor: number
+  doublingOrder: Seat[]
+  doublingActor: number
+  /** 每座加倍选择：0=不加倍 1=加倍 2=超级加倍 */
+  doubled: [number, number, number]
+  /** 每座是否明牌 */
+  revealed: [boolean, boolean, boolean]
+  /** 发牌进度：0=未发，1..3=已发轮数 */
+  dealRound: number
   lastPlayCards: Card[] | null
   lastActor: Seat | null
   multiplier: number
@@ -41,12 +55,11 @@ export interface TableView {
   turnTimeoutMs: number
 }
 
-const NO_SEATS: SeatView[] = []
-
 /** 本地引擎状态 → 视图（人类恒为 0 号座位） */
 export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<{ nickname: string; avatarId: string; tokenBalance: number }>): TableView {
-  // 叫地主阶段的 landlord 只是当前最高叫分者，只有进入出牌阶段才正式确定。
-  const landlord = s.phase === 'calling' ? null : s.landlord
+  // 发牌/叫地主阶段尚未确定地主；抢/加倍/出牌阶段显示当前地主候选
+  const landlord = s.phase === 'dealing' || s.phase === 'calling' ? null : s.landlord
+  const playing = s.phase === 'playing'
   const seats: SeatView[] = ([0, 1, 2] as Seat[]).map((seat) => {
     const meta = seatMeta[seat] ?? { nickname: `座位${seat}`, avatarId: 'default-01', tokenBalance: 0 }
     return {
@@ -58,19 +71,28 @@ export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<
       connected: true,
       tokenBalance: meta.tokenBalance,
       isHuman: seat === mySeat,
+      hand: s.revealed[seat] ? s.hands[seat]!.map((c) => ({ ...c })) : undefined,
     }
   })
   return {
     phase: s.phase,
     mySeat,
     myHand: s.hands[mySeat]!.map((c) => ({ ...c })),
-    bottom: landlord === null ? [] : s.bottom.map((c) => ({ ...c })),
+    bottom: playing ? s.bottom.map((c) => ({ ...c })) : [],
     landlord,
     hasCalled: s.landlord !== null,
     current: s.current,
     callOrder: s.callOrder,
     callActor: s.callActor,
     callMultiplier: s.callMultiplier,
+    callerSeat: s.callerSeat,
+    robOrder: s.robOrder,
+    robActor: s.robActor,
+    doublingOrder: s.doublingOrder,
+    doublingActor: s.doublingActor,
+    doubled: [...s.doubled],
+    revealed: [...s.revealed],
+    dealRound: s.dealRound,
     lastPlayCards: s.lastPlayCards ? s.lastPlayCards.map((c) => ({ ...c })) : null,
     lastActor: s.lastActor,
     multiplier: s.multiplier,
@@ -86,18 +108,27 @@ export function tableViewFromEngine(s: GameState, mySeat: Seat, seatMeta: Array<
 
 /** 线上 WS 状态 → 视图 */
 export function tableViewFromProtocol(p: GameStateForPlayer): TableView {
+  const asCard = (c: { r: number; s: number }): Card => ({ r: c.r as Card['r'], s: c.s as Card['s'] })
   return {
     phase: p.phase,
     mySeat: p.seat as Seat,
-    myHand: p.hand.map((c) => ({ r: c.r as Card['r'], s: c.s as Card['s'] })),
-    bottom: p.bottom.map((c) => ({ r: c.r as Card['r'], s: c.s as Card['s'] })),
+    myHand: p.hand.map(asCard),
+    bottom: p.bottom.map(asCard),
     landlord: p.landlord as Seat | null,
     hasCalled: p.hasCalled,
     current: p.current as Seat,
     callOrder: p.callOrder.map((s) => s as Seat),
     callActor: p.callActor,
     callMultiplier: p.callMultiplier,
-    lastPlayCards: p.lastPlayCards ? p.lastPlayCards.map((c) => ({ r: c.r as Card['r'], s: c.s as Card['s'] })) : null,
+    callerSeat: p.callerSeat as Seat | null,
+    robOrder: p.robOrder.map((s) => s as Seat),
+    robActor: p.robActor,
+    doublingOrder: p.doublingOrder.map((s) => s as Seat),
+    doublingActor: p.doublingActor,
+    doubled: p.doubled as [number, number, number],
+    revealed: p.revealed as [boolean, boolean, boolean],
+    dealRound: p.dealRound,
+    lastPlayCards: p.lastPlayCards ? p.lastPlayCards.map(asCard) : null,
     lastActor: p.lastActor as Seat | null,
     multiplier: p.multiplier,
     bombCount: p.bombCount,
@@ -113,6 +144,7 @@ export function tableViewFromProtocol(p: GameStateForPlayer): TableView {
       connected: s.connected,
       tokenBalance: s.tokenBalance,
       isHuman: s.seat === p.seat,
+      hand: s.hand ? s.hand.map(asCard) : undefined,
     })),
     turnStartedAt: p.turnStartedAt,
     turnTimeoutMs: p.turnTimeoutMs,
@@ -132,6 +164,14 @@ export function emptyTableView(mySeat: Seat = 0, myNickname = '你', myAvatar = 
     callOrder: [0, 1, 2] as Seat[],
     callActor: 0,
     callMultiplier: 1,
+    callerSeat: null,
+    robOrder: [0, 1, 2] as Seat[],
+    robActor: 0,
+    doublingOrder: [0, 1, 2] as Seat[],
+    doublingActor: 0,
+    doubled: [0, 0, 0],
+    revealed: [false, false, false],
+    dealRound: 0,
     lastPlayCards: null,
     lastActor: null,
     multiplier: 1,

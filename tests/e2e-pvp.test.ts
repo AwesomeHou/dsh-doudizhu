@@ -3,7 +3,7 @@
  * 运行：npm run test:e2e （需先启动：cd worker && npx wrangler dev --port 8787）
  */
 import { describe, expect, it } from 'vitest'
-import { botCall, botMove } from '../shared/engine/bot.ts'
+import { botCall, botDouble, botMove, botRob } from '../shared/engine/bot.ts'
 import { classify, type Play } from '../shared/engine/valid.ts'
 import type { Card } from '../shared/engine/types.ts'
 import { PROTOCOL_VERSION } from '../shared/protocol.ts'
@@ -56,18 +56,27 @@ function openClient(roomId: string, token: string): Promise<{ ws: WebSocket; sea
 
 function actOnState(client: { ws: WebSocket; seat: number }, s: Record<string, unknown>): void {
   if (s.finished || s.current !== client.seat) return
+  if (s.phase === 'dealing') return // 发牌由服务端定时推进
   if (s.phase === 'calling') {
     const call = botCall(s.hand as Card[])
     console.log(`[client ${client.seat}] call=${call}`)
-    client.ws.send(JSON.stringify({ v: 1, t: 'call', d: { call } }))
+    client.ws.send(JSON.stringify({ v: PROTOCOL_VERSION, t: 'call', d: { call } }))
+  } else if (s.phase === 'robbing') {
+    const rob = botRob(s.hand as Card[])
+    console.log(`[client ${client.seat}] rob=${rob}`)
+    client.ws.send(JSON.stringify({ v: PROTOCOL_VERSION, t: 'call', d: { call: rob } }))
+  } else if (s.phase === 'doubling') {
+    const choice = botDouble(s.hand as Card[])
+    console.log(`[client ${client.seat}] double=${choice}`)
+    client.ws.send(JSON.stringify({ v: PROTOCOL_VERSION, t: 'double', d: { choice } }))
   } else {
     const last = (s.lastPlayCards && (s.lastPlayCards as Card[]).length > 0)
       ? classify(s.lastPlayCards as Card[]) as Play
       : null
     const move = botMove(s.hand as Card[], last)
     client.ws.send(move === null
-      ? JSON.stringify({ v: 1, t: 'pass', d: {} })
-      : JSON.stringify({ v: 1, t: 'play', d: { cards: move } }))
+      ? JSON.stringify({ v: PROTOCOL_VERSION, t: 'pass', d: {} })
+      : JSON.stringify({ v: PROTOCOL_VERSION, t: 'play', d: { cards: move } }))
   }
 }
 
@@ -137,4 +146,45 @@ describe('M2 PVP 端到端（需 wrangler dev 在 :8787）', () => {
     // 余额非负
     for (const d of ds) expect(d.balance_after).toBeGreaterThanOrEqual(0)
   }, 150_000)
+
+  it('两个真人一起匹配 → 必须进同一房间（防拆桌/幽灵座位）', async () => {
+    const tokens: string[] = []
+    const uids: string[] = []
+    for (let i = 0; i < 2; i++) {
+      const u = uid()
+      uids.push(u)
+      const t = await auth(u)
+      tokens.push(t)
+      await api('/api/daily', { method: 'POST', token: t })
+    }
+    // 两个真人几乎同时加入同一桌（间隔 < 15s 补位线）
+    await api('/api/lobby/queue', { method: 'POST', token: tokens[0], body: JSON.stringify({ tableId: 'novice' }) })
+    await new Promise((r) => setTimeout(r, 300))
+    await api('/api/lobby/queue', { method: 'POST', token: tokens[1], body: JSON.stringify({ tableId: 'novice' }) })
+
+    // 各自轮询直到匹配，必须拿到同一个 roomId
+    const rooms: string[] = []
+    const deadline = Date.now() + 40_000
+    while (Date.now() < deadline && rooms.length < 2) {
+      const statuses = await Promise.all(tokens.map((t) => api(`/api/lobby/status?tableId=novice&_=${Date.now()}`, { token: t })))
+      for (let i = 0; i < 2; i++) {
+        const s = statuses[i] as { status: string; roomId?: string }
+        if (s.status === 'matched' && s.roomId && !rooms[i]) rooms[i] = s.roomId
+      }
+      if (rooms.length < 2) await new Promise((r) => setTimeout(r, 800))
+    }
+    expect(rooms[0]).toBeTruthy()
+    expect(rooms[1]).toBeTruthy()
+    // 核心断言：两个真人必须在同一房间
+    expect(rooms[0]).toBe(rooms[1])
+
+    // 断线托管前先连上验证座位正常
+    const clients: Client[] = []
+    for (const t of tokens) {
+      const c = await openClient(rooms[0]!, t)
+      clients.push({ ...c, settled: null })
+    }
+    expect(new Set(clients.map((c) => c.seat)).size).toBe(2)
+    for (const c of clients) c.ws.close()
+  }, 60_000)
 })

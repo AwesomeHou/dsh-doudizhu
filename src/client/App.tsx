@@ -103,6 +103,44 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 .ddz-card-rank{font-size:18px;letter-spacing:-.04em}
 .ddz-card-rank.long{font-size:15px;letter-spacing:-.08em}
 .ddz-card-suit{font-size:13px;line-height:1}
+/* 大王/小王：JOKER 英文竖排，大王红、小王黑 */
+.ddz-joker-card{justify-content:center;align-items:center}
+.ddz-joker-corner{flex-direction:column;gap:1px}
+.ddz-joker-letter{display:block;font-size:12px;line-height:1;font-weight:800}
+.ddz-joker-main{display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:900;line-height:1;font-size:19px;letter-spacing:.02em}
+.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:25px}
+.ddz-joker-card.ddz-card-big .ddz-joker-letter{font-size:14px}
+.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:12px}
+.ddz-joker-card.ddz-card-mini .ddz-joker-letter{font-size:8px}
+/* 自己的手牌放大 */
+.ddz-card-big{width:56px;height:80px;border-radius:9px;font-size:24px}
+.ddz-card-big .ddz-card-rank{font-size:22px}
+.ddz-card-big .ddz-card-rank.long{font-size:17px;letter-spacing:-.06em}
+.ddz-card-big .ddz-card-suit{font-size:16px}
+.ddz-card-big .ddz-card-corner.top{top:6px;left:6px}
+.ddz-card-big .ddz-card-corner.bottom{right:6px;bottom:6px}
+.ddz-card-big:hover{transform:translateY(-3px);box-shadow:0 4px 9px rgba(26,32,47,.14)}
+.ddz-card-big.sel{transform:translateY(-18px)}
+.ddz-card-big.sel:hover{transform:translateY(-18px);box-shadow:0 0 0 2px var(--dz-blue),0 5px 10px rgba(77,107,254,.18)}
+.ddz-human-hand .ddz-card-stack-item:not(:first-child){margin-left:-32px}
+/* 明牌展示用的小牌 */
+.ddz-card-mini{width:26px;height:38px;border-radius:5px;font-size:13px}
+.ddz-card-mini .ddz-card-rank{font-size:12px}
+.ddz-card-mini .ddz-card-rank.long{font-size:10px;letter-spacing:-.05em}
+.ddz-card-mini .ddz-card-suit{font-size:9px}
+.ddz-card-mini .ddz-card-corner.top{top:3px;left:3px}
+.ddz-card-mini .ddz-card-corner.bottom{right:3px;bottom:3px}
+.ddz-revealed-row{display:flex;flex-wrap:wrap;justify-content:center;gap:0;max-width:220px}
+.ddz-revealed-card{flex:0 0 auto}
+.ddz-revealed-card:not(:first-child){margin-left:-15px}
+.ddz-revealed-card .ddz-card{cursor:default}
+.ddz-revealed-card .ddz-card:hover{transform:none;box-shadow:0 1px 3px rgba(26,32,47,.12)}
+/* 发牌完成后的整理动画 */
+.ddz-hand-arranging .ddz-hand-card{animation:ddz-arrange-in .4s cubic-bezier(.22,1,.36,1) both}
+@keyframes ddz-arrange-in{0%{transform:translateY(9px) scale(.95)}60%{transform:translateY(-2px) scale(1.015)}100%{transform:none}}
+/* 超级加倍按钮 */
+.ddz-btn-gold{background:var(--dz-gold)}
+.ddz-btn-gold:hover{background:#7d540f}
 .ddz-card-back{cursor:default;background:#f3f5fa;color:transparent}
 .ddz-card-back:hover{transform:none;box-shadow:0 1px 3px rgba(26,32,47,.12)}
 .ddz-card-back img{width:72%;height:72%;object-fit:contain;opacity:.78}
@@ -276,20 +314,43 @@ button.ddz-rank:focus-visible{outline:3px solid rgba(77,107,254,.28);outline-off
 @keyframes ddz-action-ready{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes ddz-turn-pulse{0%,100%{box-shadow:0 2px 6px rgba(26,32,47,.08)}50%{box-shadow:0 0 0 3px rgba(77,107,254,.12),0 3px 8px rgba(77,107,254,.16)}}
 @keyframes ddz-countdown-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
- @media (max-width:720px){.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-rank{font-size:16px}.ddz-card-rank.long{font-size:14px}.ddz-card-corner.top{top:4px;left:4px}.ddz-card-corner.bottom{right:4px;bottom:4px}.ddz-folded-cards .ddz-card-stack-item:not(:first-child){margin-left:-20px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}}
- @media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-sidebar-entry,.ddz-card{transition:none}.ddz-card:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-pip-window,.ddz-modal,.ddz-toast,.ddz-avatar-picker,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent,.ddz-special-play,.ddz-special-label{animation:none!important}}
+ @media (max-width:720px){.ddz-body{padding:16px}.ddz-corner-close{top:10px;right:12px}.ddz-table-exit{top:10px;left:12px}.ddz-table-reserved-bar{height:36px;flex-basis:36px}.ddz-lobby{padding:20px 16px 24px}.ddz-lobby-top{align-items:flex-start;flex-direction:column;margin-bottom:32px}.ddz-balance{width:auto;justify-content:flex-start}.ddz-balance-copy{align-items:flex-start}.ddz-table-grid{flex-direction:column}.ddz-table-grid .ddz-tab{flex-basis:auto}.ddz-top-reveal{min-height:64px}.ddz-table-middle{grid-template-columns:1fr 1.2fr 1fr;gap:6px}.ddz-side-zone{display:flex;flex-direction:column;gap:8px}.ddz-side-zone .ddz-play-area{min-height:72px}.ddz-table-center{min-height:110px;order:0}.ddz-seat{min-width:0}.ddz-card{width:38px;height:56px;font-size:18px}.ddz-card-big{width:46px;height:66px;font-size:20px}.ddz-card-big .ddz-card-rank{font-size:18px}.ddz-card-big .ddz-card-rank.long{font-size:15px}.ddz-card-big .ddz-card-suit{font-size:13px}.ddz-card-big .ddz-card-corner.top{top:5px;left:5px}.ddz-card-big .ddz-card-corner.bottom{right:5px;bottom:5px}.ddz-joker-card.ddz-card-big .ddz-joker-main{font-size:21px}.ddz-joker-card.ddz-card-big .ddz-joker-letter{font-size:12px}.ddz-card-mini{width:22px;height:32px;font-size:11px}.ddz-card-mini .ddz-card-rank{font-size:10px}.ddz-card-mini .ddz-card-rank.long{font-size:8px}.ddz-card-mini .ddz-card-suit{font-size:8px}.ddz-joker-card.ddz-card-mini .ddz-joker-main{font-size:10px}.ddz-joker-card.ddz-card-mini .ddz-joker-letter{font-size:7px}.ddz-human-hand .ddz-card-stack-item:not(:first-child){margin-left:-25px}.ddz-table{padding:12px}.ddz-human-hand-row{flex-direction:column;align-items:center;gap:12px}.ddz-human-hand-row .ddz-seat{position:static}.ddz-human-hand{width:100%;flex:none;overflow-x:auto;justify-content:flex-start}}
+ @media (prefers-reduced-motion:reduce){.ddz-btn,.ddz-sidebar-entry,.ddz-card{transition:none}.ddz-card:hover{transform:none}.ddz-card.sel{transform:translateY(-8px)}.ddz-pip-window,.ddz-modal,.ddz-toast,.ddz-avatar-picker,.ddz-reveal-card,.ddz-played-card,.ddz-hand-card,.ddz-action-dock.is-active,.ddz-seat-chip.is-turn,.ddz-countdown.urgent,.ddz-special-play,.ddz-special-label,.ddz-hand-arranging .ddz-hand-card{animation:none!important}}
 `
 
 /* ============================== 基础组件 ============================== */
 
-function CardView({ card, selected, onClick }: { card: Card; selected?: boolean; onClick?: () => void }) {
-  const isRed = card.s === 1 || card.s === 2 || card.r >= 13
+function CardView({ card, selected, onClick, size = 'normal' }: { card: Card; selected?: boolean; onClick?: () => void; size?: 'normal' | 'big' | 'mini' }) {
+  const isJoker = card.r >= 13
+  // 大王红、小王黑；普通牌红桃/方块红
+  const isRed = isJoker ? card.r === 14 : card.s === 1 || card.s === 2
   const label = cardName(card)
-  const rank = card.r < 13 ? RANK_NAMES[card.r]! : card.r === 13 ? '小王' : '大王'
-  const suit = card.r < 13 ? SUIT_SYMBOLS[card.s]! : ''
+  const sizeClass = size === 'big' ? ' ddz-card-big' : size === 'mini' ? ' ddz-card-mini' : ''
+  if (isJoker) {
+    // 大王/小王：英文 JOKER 竖排，大王红色、小王黑色
+    const letters = 'JOKER'.split('')
+    return createElement('div', {
+      className: 'ddz-card ddz-joker-card' + (isRed ? ' red' : '') + (selected ? ' sel' : '') + sizeClass,
+      role: onClick ? 'button' : undefined,
+      tabIndex: onClick ? 0 : undefined,
+      'aria-label': onClick ? `选择${label}` : undefined,
+      'aria-pressed': onClick ? selected : undefined,
+      onClick,
+      onKeyDown: onClick ? (event: { key: string }) => {
+        if (event.key === 'Enter' || event.key === ' ') onClick()
+      } : undefined,
+    },
+    createElement('span', { className: 'ddz-card-corner top ddz-joker-corner', 'aria-hidden': true },
+      ...letters.map((ch, i) => createElement('span', { key: i, className: 'ddz-joker-letter' }, ch))),
+    createElement('span', { className: 'ddz-joker-main', 'aria-label': label },
+      ...letters.map((ch, i) => createElement('span', { key: i, className: 'ddz-joker-letter' }, ch))),
+    )
+  }
+  const rank = RANK_NAMES[card.r]!
+  const suit = SUIT_SYMBOLS[card.s]!
   const rankClass = rank.length > 1 ? ' long' : ''
   return createElement('div', {
-    className: 'ddz-card' + (isRed ? ' red' : '') + (selected ? ' sel' : ''),
+    className: 'ddz-card' + (isRed ? ' red' : '') + (selected ? ' sel' : '') + sizeClass,
     role: onClick ? 'button' : undefined,
     tabIndex: onClick ? 0 : undefined,
     'aria-label': onClick ? `选择${label}` : undefined,
@@ -301,9 +362,9 @@ function CardView({ card, selected, onClick }: { card: Card; selected?: boolean;
   },
   createElement('span', { className: 'ddz-card-corner top' },
     createElement('span', { className: 'ddz-card-rank' + rankClass }, rank),
-    suit && createElement('span', { className: 'ddz-card-suit' }, suit),
+    createElement('span', { className: 'ddz-card-suit' }, suit),
   ),
-  suit && createElement('span', { className: 'ddz-card-corner bottom', 'aria-hidden': true },
+  createElement('span', { className: 'ddz-card-corner bottom', 'aria-hidden': true },
     createElement('span', { className: 'ddz-card-suit' }, suit),
   ),
   )
@@ -368,9 +429,9 @@ function PlayedArea({ seat, humanSeat = 0, cards, countdownSeconds = null, actio
   const play = cards ? classify(cards) : null
   const isSpecialPlay = play !== null && !['single', 'pair', 'triple'].includes(play.kind)
   const specialClass = isSpecialPlay && play ? ` ddz-special-play ddz-special-${play.kind}` : ''
-  // 行动反馈文本的层级：叫/抢 用主色高权重，放弃/过 用次级灰
+  // 行动反馈文本的层级：叫/抢/加倍/明牌 用主色高权重，放弃/过 用次级灰
   const actionClass = action
-    ? (action.text === '叫地主' || action.text === '抢地主' ? '' : ' is-pass')
+    ? (action.text === '叫地主' || action.text === '抢地主' || action.text === '加倍' || action.text === '超级加倍' || action.text === '明牌' ? '' : ' is-pass')
     : ''
   return createElement('div', {
     className: 'ddz-play-area',
@@ -422,18 +483,33 @@ function GameTableShell(props: {
   onPass: () => void
   onHint: () => void
   onCall: (call: boolean) => void
+  onDouble: (choice: 0 | 1 | 2) => void
+  onMing: () => void
   callAnnouncement: string | null
   onExit: () => void
   onDismissNotice: () => void
 }) {
-  const { view, selected, notice, remainingSeconds, onToggleCard, onPlay, onPass, onHint, onCall, callAnnouncement, onExit, onDismissNotice } = props
+  const { view, selected, notice, remainingSeconds, onToggleCard, onPlay, onPass, onHint, onCall, onDouble, onMing, callAnnouncement, onExit, onDismissNotice } = props
   const [playedBySeat, setPlayedBySeat] = useState<PlayedBySeat>(() => [null, null, null])
 
-  // —— 角色行动反馈（叫地主/抢地主/不抢/过）：以文本形式显示在各自出牌区内，与出牌同性质 ——
-  // 本地不直接从协议拿到“谁刚做了什么”，靠服务端状态推进（callActor/callMultiplier/
+  // —— 发牌完成 → 手牌“整理”动画（一次短促的落定动效） ——
+  const [arranging, setArranging] = useState(false)
+  const prevPhaseRef = useRef<TableView['phase'] | null>(null)
+  useEffect(() => {
+    const prev = prevPhaseRef.current
+    prevPhaseRef.current = view.phase
+    if (prev === 'dealing' && view.phase !== 'dealing' && view.phase !== 'settled') {
+      setArranging(true)
+      const t = window.setTimeout(() => setArranging(false), 700)
+      return () => window.clearTimeout(t)
+    }
+  }, [view.phase])
+
+  // —— 角色行动反馈（叫地主/抢地主/加倍/过等）：以文本形式显示在各自出牌区内，与出牌同性质 ——
+  // 本地不直接从协议拿到“谁刚做了什么”，靠服务端状态推进（callActor/robActor/doublingActor/
   // current/lastActor 的 diff）推断，并写入各出牌区。
   // 行动文本与出牌一样持久显示（不自动消失）：轮到某座位时清空该座位出牌框（“过”轮到自己才消失），
-  // 出牌阶段首次落牌时清空叫牌遗留文本，新一轮叫牌开始（重开）时清空上一轮文本。
+  // 出牌阶段首次落牌时清空叫牌遗留文本，新一轮对局开始（重开）时清空上一轮文本。
   const [actionText, setActionText] = useState<Record<Seat, string | null>>({} as Record<Seat, string | null>)
   const actionKeyRef = useRef<Record<number, number>>({})
   const lastShownRef = useRef<Record<number, { text: string; at: number }>>({})
@@ -494,9 +570,9 @@ function GameTableShell(props: {
     }
   }, [view.phase, view.lastPlayCards])
 
-  // 新一轮叫牌开始（callActor 回到 0，含无人叫重开）→ 清空上一轮遗留的行动文本
+  // 新一轮对局开始（进入发牌阶段）→ 清空上一轮遗留的行动文本
   useEffect(() => {
-    if (view.phase === 'calling' && view.callActor === 0) {
+    if (view.phase === 'dealing' || (view.phase === 'calling' && view.callActor === 0)) {
       setActionText({} as Record<Seat, string | null>)
     }
   }, [view.phase, view.callActor])
@@ -564,7 +640,9 @@ function GameTableShell(props: {
   const prevSeat = ((view.mySeat + 2) % 3) as Seat
   const botA = otherSeats.find((s) => s.seat === prevSeat) ?? otherSeats[0] // 上家 → 左侧
   const botB = otherSeats.find((s) => s.seat === nextSeat) ?? otherSeats[1] // 下家 → 右侧
-  const isMyTurn = view.phase !== 'settled' && !view.finished && view.current === view.mySeat
+  // 回合制阶段（叫/抢/加倍/出牌），发牌阶段不计
+  const isTurnPhase = view.phase === 'calling' || view.phase === 'robbing' || view.phase === 'doubling' || view.phase === 'playing'
+  const isMyTurn = !view.finished && isTurnPhase && view.current === view.mySeat
   const lastPlay = view.lastPlayCards && view.lastPlayCards.length > 0 ? classify(view.lastPlayCards) : null
   const canPass = view.phase === 'playing' && lastPlay !== null
   const canPlaySelected = (): boolean => {
@@ -575,7 +653,11 @@ function GameTableShell(props: {
     return selected.every((c) => view.myHand.some((x) => x.r === c.r && x.s === c.s))
   }
   const showCountdown = remainingSeconds !== null && remainingSeconds > 0
-  const callLabel = view.hasCalled ? '抢地主' : '叫地主'
+  // 明牌座位的完整手牌（用于在个人名片上方展示）
+  const revealedFor = (seatView: SeatView | undefined): Card[] | undefined => {
+    if (!seatView) return undefined
+    return view.revealed[seatView.seat] ? (seatView.hand ?? []) : undefined
+  }
   // 座位 → 行动文本（带动画 key，保证同文案二次出现时重新播放入场动画）
   const actionFor = (seat: Seat): { text: string; id: number } | null => {
     const text = actionText[seat]
@@ -588,9 +670,9 @@ function GameTableShell(props: {
     notice && view.phase !== 'playing' && createElement('div', { className: 'ddz-toast', onClick: onDismissNotice }, notice),
 
     createElement('div', { className: 'ddz-table ddz-game-table' },
-      // 顶部揭示的地主底牌
+      // 顶部揭示的地主底牌（进入出牌阶段才揭示）
       createElement('div', { className: 'ddz-top-reveal' },
-        view.landlord !== null
+        view.bottom.length > 0
           ? createElement('div', { key: 'revealed', className: 'ddz-reveal-cards is-revealed', 'aria-label': '已揭示的地主底牌', 'aria-live': 'polite' },
               ...view.bottom.map((card, i) => createElement('div', {
                 key: i,
@@ -608,43 +690,51 @@ function GameTableShell(props: {
       ),
       createElement('div', { className: 'ddz-table-middle' },
         createElement('div', { className: 'ddz-side-zone left' },
-          botA && createElement(SeatPanel, { view, seatView: botA, isTurn: view.current === botA.seat }),
+          botA && createElement(SeatPanel, { view, seatView: botA, isTurn: isTurnPhase && view.current === botA.seat, revealedCards: revealedFor(botA) }),
           botA && createElement(PlayedArea, {
             seat: botA.seat,
             humanSeat: view.mySeat,
             cards: playedBySeat[botA.seat],
-            countdownSeconds: view.current === botA.seat && showCountdown ? remainingSeconds : null,
+            countdownSeconds: isTurnPhase && view.current === botA.seat && showCountdown ? remainingSeconds : null,
             action: actionFor(botA.seat),
           }),
         ),
         createElement('div', { className: 'ddz-table-center', style: { textAlign: 'center' } },
           createElement('div', { className: 'ddz-table-turn-label' },
-            view.phase === 'calling'
-              ? (callAnnouncement ?? (isMyTurn ? `轮到你${callLabel}` : '等待叫地主…'))
-              : view.phase === 'playing'
-                ? (callAnnouncement ?? (isMyTurn ? '轮到你出牌' : '对手出牌中…'))
-                : ''),
-        ),
+            view.phase === 'dealing'
+              ? (view.dealRound === 0 ? '洗牌中…' : `发牌中… 第 ${view.dealRound}/3 轮`)
+              : view.phase === 'calling'
+                ? (callAnnouncement ?? (isMyTurn ? '轮到你叫地主' : '等待叫地主…'))
+                : view.phase === 'robbing'
+                  ? (callAnnouncement ?? (isMyTurn ? '轮到你抢地主' : '等待抢地主…'))
+                  : view.phase === 'doubling'
+                    ? (isMyTurn ? '轮到你加倍' : '等待加倍…')
+                    : view.phase === 'playing'
+                      ? (callAnnouncement ?? (isMyTurn ? '轮到你出牌' : '对手出牌中…'))
+                      : ''),
+          createElement('div', { className: 'ddz-multiplier', style: { marginTop: 6, display: 'inline-block' }, 'aria-live': 'polite' },
+            `总倍率 ×${view.multiplier}`),
+          ),
         createElement('div', { className: 'ddz-side-zone right' },
           botB && createElement(PlayedArea, {
             seat: botB.seat,
             humanSeat: view.mySeat,
             cards: playedBySeat[botB.seat],
-            countdownSeconds: view.current === botB.seat && showCountdown ? remainingSeconds : null,
+            countdownSeconds: isTurnPhase && view.current === botB.seat && showCountdown ? remainingSeconds : null,
             action: actionFor(botB.seat),
           }),
-          botB && createElement(SeatPanel, { view, seatView: botB, isTurn: view.current === botB.seat }),
+          botB && createElement(SeatPanel, { view, seatView: botB, isTurn: isTurnPhase && view.current === botB.seat, revealedCards: revealedFor(botB) }),
         ),
       ),
       // 我的手牌与操作
       createElement('div', { className: 'ddz-human-area', style: { textAlign: 'center' } },
         createElement(PlayedArea, { seat: view.mySeat, humanSeat: view.mySeat, cards: playedBySeat[view.mySeat], action: actionFor(view.mySeat) }),
         createElement('div', { className: 'ddz-human-hand-row' },
-          humanView && createElement(SeatPanel, { view, seatView: humanView, isTurn: isMyTurn }),
-          createElement('div', { className: 'ddz-row ddz-hand ddz-folded-cards ddz-human-hand', style: { flexWrap: 'nowrap', gap: 0, paddingBottom: 4 } },
+          humanView && createElement(SeatPanel, { view, seatView: humanView, isTurn: isMyTurn, revealedCards: revealedFor(humanView) }),
+          createElement('div', { className: 'ddz-row ddz-hand ddz-folded-cards ddz-human-hand' + (arranging ? ' ddz-hand-arranging' : ''), style: { flexWrap: 'nowrap', gap: 0, paddingBottom: 4 } },
             ...sortedHand.map((c, i) =>
               createElement('div', {
-                key: `${c.r}-${c.s}-${i}`,
+                key: `${c.r}-${c.s}`,
                 className: 'ddz-hand-card ddz-card-stack-item',
                 style: { '--ddz-delay': `${Math.min(i, 12) * 35}ms` },
                 onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -658,6 +748,7 @@ function GameTableShell(props: {
                 },
               }, createElement(CardView, {
                 card: c,
+                size: 'big',
                 selected: selected.some((x) => x.r === c.r && x.s === c.s),
                 onClick: () => {
                   if (suppressClickRef.current) {
@@ -671,41 +762,77 @@ function GameTableShell(props: {
           ),
         ),
         createElement('div', { className: 'ddz-action-dock ddz-row' + (isMyTurn ? ' is-active' : ''), style: { justifyContent: 'center', gap: 10, marginTop: 10 } },
-          view.phase === 'calling'
-            ? (isMyTurn
-                ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
-                    createElement('button', { className: 'ddz-btn', onClick: () => { onCall(true); showAction(view.mySeat, view.hasCalled ? '抢地主' : '叫地主') } }, callLabel),
-                    createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => { onCall(false); showAction(view.mySeat, view.hasCalled ? '不抢' : '不叫') } }, view.hasCalled ? '不抢' : '不叫'),
-                  )
-                : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
-            : (view.phase === 'playing'
+          view.phase === 'dealing'
+            ? (view.revealed[view.mySeat]
+                ? createElement('span', { className: 'ddz-action-status ddz-dim' }, '已明牌')
+                : view.dealRound >= 1
+                  ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
+                      createElement('span', { className: 'ddz-action-status ddz-dim' }, `发牌中 第 ${view.dealRound}/3 轮`),
+                      createElement('button', { className: 'ddz-btn ddz-btn-red', onClick: () => { onMing(); showAction(view.mySeat, '明牌') } }, `明牌 ×${5 - view.dealRound}`),
+                    )
+                  : createElement('span', { className: 'ddz-action-status ddz-dim' }, '洗牌中…'))
+            : view.phase === 'calling'
+              ? (isMyTurn
+                  ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
+                      createElement('button', { className: 'ddz-btn', onClick: () => { onCall(true); showAction(view.mySeat, '叫地主') } }, '叫地主'),
+                      createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => { onCall(false); showAction(view.mySeat, '不叫') } }, '不叫'),
+                    )
+                  : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待叫地主…'))
+              : view.phase === 'robbing'
                 ? (isMyTurn
                     ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
-                        createElement('button', { className: 'ddz-btn', disabled: !canPlaySelected(), onClick: onPlay }, '出牌'),
-                        createElement('div', { className: 'ddz-action-hint' },
-                          notice && createElement('div', { className: 'ddz-action-bubble', role: 'status', onClick: onDismissNotice }, notice),
-                          createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onHint }, '提示'),
-                        ),
-                        createElement('button', { className: 'ddz-btn ddz-btn-ghost', disabled: !canPass, onClick: () => { onPass(); showAction(view.mySeat, '过'); clearSeatCards(view.mySeat) } }, '过'),
-                        isMyTurn && showCountdown && createElement('span', {
-                          className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
-                          'aria-live': 'polite',
-                        }, `${remainingSeconds}s`),
+                        createElement('button', { className: 'ddz-btn', onClick: () => { onCall(true); showAction(view.mySeat, '抢地主') } }, '抢地主'),
+                        createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => { onCall(false); showAction(view.mySeat, '不抢') } }, '不抢'),
                       )
-                    : createElement('span', { className: 'ddz-action-status ddz-turn' }, '对手思考中…'))
-                : null),
+                    : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待抢地主…'))
+                : view.phase === 'doubling'
+                  ? (isMyTurn
+                      ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
+                          createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: () => { onDouble(0); showAction(view.mySeat, '不加倍') } }, '不加倍'),
+                          createElement('button', { className: 'ddz-btn', onClick: () => { onDouble(1); showAction(view.mySeat, '加倍') } }, '加倍 ×2'),
+                          createElement('button', { className: 'ddz-btn ddz-btn-gold', onClick: () => { onDouble(2); showAction(view.mySeat, '超级加倍') } }, '超级加倍 ×4'),
+                          showCountdown && createElement('span', {
+                            className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
+                            'aria-live': 'polite',
+                          }, `${remainingSeconds}s`),
+                        )
+                      : createElement('span', { className: 'ddz-action-status ddz-dim' }, '等待加倍…'))
+                  : (view.phase === 'playing'
+                      ? (isMyTurn
+                          ? createElement('div', { className: 'ddz-row', style: { gap: 10 } },
+                              view.landlord === view.mySeat && !view.revealed[view.mySeat]
+                                && createElement('button', { className: 'ddz-btn ddz-btn-red', onClick: () => { onMing(); showAction(view.mySeat, '明牌') } }, '明牌'),
+                              createElement('button', { className: 'ddz-btn', disabled: !canPlaySelected(), onClick: onPlay }, '出牌'),
+                              createElement('div', { className: 'ddz-action-hint' },
+                                notice && createElement('div', { className: 'ddz-action-bubble', role: 'status', onClick: onDismissNotice }, notice),
+                                createElement('button', { className: 'ddz-btn ddz-btn-ghost', onClick: onHint }, '提示'),
+                              ),
+                              createElement('button', { className: 'ddz-btn ddz-btn-ghost', disabled: !canPass, onClick: () => { onPass(); showAction(view.mySeat, '过'); clearSeatCards(view.mySeat) } }, '过'),
+                              showCountdown && createElement('span', {
+                                className: 'ddz-countdown ddz-action-countdown' + ((remainingSeconds ?? 0) <= 3 ? ' urgent' : ''),
+                                'aria-live': 'polite',
+                              }, `${remainingSeconds}s`),
+                            )
+                          : createElement('span', { className: 'ddz-action-status ddz-turn' }, '对手思考中…'))
+                      : null),
         ),
       ),
     ),
   )
 }
 
-function SeatPanel(props: { view: TableView; seatView: SeatView; isTurn: boolean }) {
-  const { view, seatView, isTurn } = props
-  const roundMultiplier = view.phase === 'calling' ? view.callMultiplier : view.multiplier
-  const statusLabel = seatView.isHuman ? `倍率 ×${roundMultiplier}` : seatView.handCount + ' 张手牌'
+function SeatPanel(props: { view: TableView; seatView: SeatView; isTurn: boolean; revealedCards?: Card[] }) {
+  const { view, seatView, isTurn, revealedCards } = props
+  // 场上实时总倍数（明牌/抢地主/加倍都会即时翻倍）
+  const statusLabel = seatView.isHuman ? `倍率 ×${view.multiplier}` : seatView.handCount + ' 张手牌'
   const statusClass = seatView.isHuman ? 'ddz-multiplier' : 'ddz-card-count'
   return createElement('div', { className: 'ddz-seat' },
+    revealedCards && revealedCards.length > 0
+      && createElement('div', { className: 'ddz-revealed-row', role: 'img', 'aria-label': `${seatView.nickname}明牌` },
+        ...revealedCards.map((c) => createElement('div', {
+          key: `${c.r}-${c.s}`,
+          className: 'ddz-revealed-card',
+        }, createElement(CardView, { card: c, size: 'mini' })))),
     createElement('div', { className: 'ddz-seat-identity' },
       createElement(PlayerRank, { tokenBalance: seatView.tokenBalance }),
       createElement('div', { className: 'ddz-seat-chip' + (isTurn ? ' is-turn' : '') },
@@ -1017,6 +1144,11 @@ function OnlineTable(props: {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef(0)
   const pingRef = useRef<number | null>(null)
+  // 结算回调稳定引用（配合“打完最后一手后延迟 1s 再进入结算”）
+  const onSettledRef = useRef(onSettled)
+  onSettledRef.current = onSettled
+  // 已结算后不再重连（房间已清理）
+  const settledRef = useRef(false)
 
   const send = useCallback((msg: unknown) => {
     const ws = wsRef.current
@@ -1038,7 +1170,13 @@ function OnlineTable(props: {
           setView(tableViewFromProtocol(msg.d))
           setClock(Date.now())
         } else if (msg.t === 'settle') {
-          onSettled(msg.d.myDelta, msg.d.balance_after, msg.d.winner, msg.d.spring, msg.d.multiplier, msg.d.rake)
+          // 打完最后一手后停留约 1s 展示最终牌面，再进入结算弹窗
+          const d = msg.d
+          window.setTimeout(() => {
+            if (disposed) return
+            settledRef.current = true
+            onSettledRef.current(d.myDelta, d.balance_after, d.winner, d.spring, d.multiplier, d.rake)
+          }, 1000)
         } else if (msg.t === 'pong') {
           const ts = msg.d.ts as number
           if (ts !== undefined && pingRef.current !== null) {
@@ -1050,7 +1188,7 @@ function OnlineTable(props: {
         }
       })
       ws.addEventListener('close', () => {
-        if (disposed) return
+        if (disposed || settledRef.current) return
         if (reconnectRef.current < 3) {
           reconnectRef.current += 1
           setNotice(`连接断开，正在重连（${reconnectRef.current}/3）…`)
@@ -1065,7 +1203,7 @@ function OnlineTable(props: {
       disposed = true
       ws?.close()
     }
-  }, [roomId, onSettled])
+  }, [roomId])
 
   // 倒计时刷新
   useEffect(() => {
@@ -1092,8 +1230,9 @@ function OnlineTable(props: {
     ? Math.max(0, Math.ceil((view.turnStartedAt + view.turnTimeoutMs - clock) / 1000))
     : null
 
+  // 手牌选择：即使轮不到自己出牌也能点选（但不能出），用于提前计划出牌
   const toggleSelect = (card: Card) => {
-    if (!view || view.finished || view.current !== view.mySeat) return
+    if (!view || view.finished) return
     setSelected((prev) => {
       const idx = prev.findIndex((x) => x.r === card.r && x.s === card.s)
       if (idx >= 0) return prev.filter((_, i) => i !== idx)
@@ -1141,6 +1280,8 @@ function OnlineTable(props: {
       onPass: () => send({ v: PROTOCOL_VERSION, t: 'pass', d: {} }),
       onHint: doHint,
       onCall: (call) => send({ v: PROTOCOL_VERSION, t: 'call', d: { call } }),
+      onDouble: (choice) => send({ v: PROTOCOL_VERSION, t: 'double', d: { choice } }),
+      onMing: () => send({ v: PROTOCOL_VERSION, t: 'ming', d: {} }),
       callAnnouncement: null,
       onExit,
       onDismissNotice: () => setNotice(null),
@@ -1151,7 +1292,8 @@ function OnlineTable(props: {
 
 /* ============================== 结算 ============================== */
 
-function Settle(props: {
+/** 对局结算：以弹窗形式盖在牌桌之上（打完最后一手约 1s 后弹出） */
+function SettleDialog(props: {
   result: { myDelta: number; multiplier: number; winner: string; spring: string; rake: number }
   balance: number
   onExit: () => void
@@ -1159,16 +1301,25 @@ function Settle(props: {
   const { result, balance, onExit } = props
   const myDelta = result.myDelta
   const win = myDelta > 0
-  return createElement('div', { className: 'ddz-settle ddz-body' },
-    createElement('div', { className: 'ddz-big', style: { color: win ? 'var(--dz-gold)' : 'var(--dz-red)' } },
-      win ? '🎉 你赢了' : myDelta === 0 ? '平局' : '这局输了'),
-    createElement('div', { className: 'ddz-dim', style: { margin: '10px 0' } },
-      `${result.winner} · ${result.spring === 'none' ? '无春天' : result.spring} · 总倍数 ×${result.multiplier} · 抽水 ${result.rake.toLocaleString()}`),
-    createElement('div', { className: 'ddz-result-amount' },
-      `${myDelta > 0 ? '+' : ''}${myDelta.toLocaleString()}`),
-    createElement('div', { className: 'ddz-dim' }, `当前余额 ${balance.toLocaleString()}`),
-    createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', gap: 10, marginTop: 18 } },
-      createElement('button', { className: 'ddz-btn', onClick: onExit }, '返回大厅'),
+  return createElement('div', { className: 'ddz-dialog', onClick: onExit },
+    createElement('div', {
+      className: 'ddz-dialog-card',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-label': '对局结算',
+      onClick: (event: { stopPropagation: () => void }) => event.stopPropagation(),
+      style: { textAlign: 'center', padding: 26 },
+    },
+      createElement('div', { className: 'ddz-big', style: { color: win ? 'var(--dz-gold)' : myDelta === 0 ? 'var(--dz-dim)' : 'var(--dz-red)' } },
+        win ? '🎉 你赢了' : myDelta === 0 ? '平局' : '这局输了'),
+      createElement('div', { className: 'ddz-dim', style: { margin: '10px 0' } },
+        `${result.winner} · ${result.spring === 'none' ? '无春天' : result.spring} · 总倍数 ×${result.multiplier} · 抽水 ${result.rake.toLocaleString()}`),
+      createElement('div', { className: 'ddz-result-amount' },
+        `${myDelta > 0 ? '+' : ''}${myDelta.toLocaleString()}`),
+      createElement('div', { className: 'ddz-dim' }, `当前余额 ${balance.toLocaleString()}`),
+      createElement('div', { className: 'ddz-row', style: { justifyContent: 'center', gap: 10, marginTop: 18 } },
+        createElement('button', { className: 'ddz-btn', onClick: onExit }, '返回大厅'),
+      ),
     ),
   )
 }
@@ -1465,7 +1616,7 @@ export function DoudizhuApp() {
   const [profile, setProfile] = useState<Profile>(() => loadProfile())
   const [balance, setBalance] = useState(0)
   const [claimed, setClaimed] = useState(false)
-  const [screen, setScreen] = useState<'lobby' | 'table' | 'settle'>('lobby')
+  const [screen, setScreen] = useState<'lobby' | 'table'>('lobby')
   const [tableId, setTableId] = useState(CONFIG.tables[0]!.id)
   const [result, setResult] = useState<{ myDelta: number; multiplier: number; winner: string; spring: string; rake: number } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -1816,13 +1967,14 @@ export function DoudizhuApp() {
   const onSettledOnline = useCallback((
     myDelta: number, balanceAfter: number, winner: string, spring: string, multiplier: number, rake: number,
   ) => {
+    // 结算以弹窗形式盖在牌桌上，牌桌保持展示（打完最后一手约 1s 后弹出）
     setResult({ myDelta, multiplier, winner, spring, rake })
     setBalance(balanceAfter)
-    setScreen('settle')
   }, [])
 
   const exitTable = () => {
     setRoomId(null)
+    setResult(null)
     setScreen('lobby')
   }
 
@@ -1853,8 +2005,8 @@ export function DoudizhuApp() {
       onClose: closeSurface,
     }),
     screen === 'table' && roomId && createElement(OnlineTable, { roomId, tableId, profile, onExit: exitTable, onSettled: onSettledOnline }),
-    screen === 'settle' && result && createElement(Settle, {
-      result, balance, onExit: () => setScreen('lobby'),
+    screen === 'table' && result && createElement(SettleDialog, {
+      result, balance, onExit: exitTable,
     }),
   )
 

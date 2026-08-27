@@ -11,6 +11,24 @@ export function botCall(hand: Card[], random: () => number = Math.random): boole
   return strong || random() < 0.3
 }
 
+/** 抢地主决策：手牌更强时更倾向抢（每次抢倍数 ×2） */
+export function botRob(hand: Card[], random: () => number = Math.random): boolean {
+  const strong = hand.filter((x) => x.r >= 12).length >= 2 || hand.filter((x) => x.r >= 9).length >= 4
+  return strong || random() < 0.25
+}
+
+/**
+ * 加倍决策：0=不加倍 1=加倍(×2) 2=超级加倍(×4)
+ * 手牌越强越倾向超级加倍/加倍。
+ */
+export function botDouble(hand: Card[], random: () => number = Math.random): 0 | 1 | 2 {
+  const aces = hand.filter((x) => x.r >= 12).length
+  const highs = hand.filter((x) => x.r >= 9).length
+  if (aces >= 2 && highs >= 5) return random() < 0.65 ? 2 : 1
+  if (aces >= 1) return random() < 0.35 ? 1 : 0
+  return 0
+}
+
 /**
  * 机器人出牌决策。
  * @param hand 当前手牌

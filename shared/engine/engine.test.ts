@@ -2,10 +2,10 @@
  * 规则引擎单测 —— 覆盖：牌型识别、比较、合法性、结算守恒、完整对局模拟
  */
 import { describe, expect, it } from 'vitest'
-import { botMove } from './bot.ts'
+import { botCall, botDouble, botMove, botRob } from './bot.ts'
 import { canBeat } from './compare.ts'
-import { deal, newDeck } from './deck.ts'
-import { applyAction, createGame, finalize, isLegalPlay, type GameState } from './game.ts'
+import { deal, dealInRounds, newDeck } from './deck.ts'
+import { applyAction, createGame, finalize, isLegalPlay, mingFactor, type GameState } from './game.ts'
 import { settle } from './scoring.ts'
 import { buildPlay, classify, hintPlay, legalPlays } from './valid.ts'
 import type { Card } from './types.ts'
@@ -17,6 +17,38 @@ function c(r: number, s = 0): Card {
 /** 由点数序列构造一手牌（花色自动分配） */
 function mk(ranks: number[]): Card[] {
   return ranks.map((r, i) => ({ r, s: (i % 4) as Card['s'] }))
+}
+
+/** 推进发牌直到进入叫地主阶段 */
+function dealAll(g: GameState): GameState {
+  let s = g
+  while (s.phase === 'dealing' && s.dealRound < 3) s = applyAction(s, { type: 'deal' })
+  if (s.phase === 'dealing' && s.dealRound >= 3) s = applyAction(s, { type: 'start' })
+  return s
+}
+
+/** 完成抢地主（全部不抢）→ 进入加倍阶段 */
+function robAll(skip?: (s: GameState) => boolean): (s: GameState) => GameState {
+  return (g: GameState) => {
+    let s = g
+    while (s.phase === 'robbing') {
+      const seat = s.robOrder[s.robActor]!
+      s = applyAction(s, { type: 'call', seat, call: skip ? skip(s) : false })
+    }
+    return s
+  }
+}
+
+/** 完成加倍（全部不加倍）→ 进入出牌阶段 */
+function doubleAll(skip?: (s: GameState) => 0 | 1 | 2): (s: GameState) => GameState {
+  return (g: GameState) => {
+    let s = g
+    while (s.phase === 'doubling') {
+      const seat = s.doublingOrder[s.doublingActor]!
+      s = applyAction(s, { type: 'double', seat, choice: skip ? skip(s) : 0 })
+    }
+    return s
+  }
 }
 
 /** 可复现的伪随机（mulberry32） */
@@ -42,6 +74,67 @@ describe('发牌', () => {
     expect(bottom.length).toBe(3)
     const all = [...hands.flat(), ...bottom]
     expect(new Set(all.map((x) => `${x.r}-${x.s}`)).size).toBe(54)
+  })
+
+  it('分 3 轮发牌：每轮 6/6/5，共 54 张无重复', () => {
+    const { rounds, bottom } = dealInRounds(rng(42))
+    expect(rounds.length).toBe(3)
+    // 每人 6+6+5=17
+    const perSeat = [0, 1, 2].map((seat) => rounds.reduce((n, round) => n + round[seat]!.length, 0))
+    expect(perSeat).toEqual([17, 17, 17])
+    expect(bottom.length).toBe(3)
+    const all = [...rounds.flat().flat(), ...bottom]
+    expect(new Set(all.map((x) => `${x.r}-${x.s}`)).size).toBe(54)
+  })
+
+  it('发牌阶段逐轮推进：3 次 deal 后仍在发牌（保留明牌窗口），start 后进入叫地主', () => {
+    let g = createGame(rng(9))
+    expect(g.phase).toBe('dealing')
+    expect(g.dealRound).toBe(0)
+    expect(g.hands.map((h) => h.length)).toEqual([0, 0, 0])
+    g = applyAction(g, { type: 'deal' })
+    expect(g.dealRound).toBe(1)
+    expect(g.hands.map((h) => h.length)).toEqual([6, 6, 6])
+    g = applyAction(g, { type: 'deal' })
+    expect(g.dealRound).toBe(2)
+    expect(g.hands.map((h) => h.length)).toEqual([12, 12, 12])
+    g = applyAction(g, { type: 'deal' })
+    expect(g.dealRound).toBe(3)
+    expect(g.hands.map((h) => h.length)).toEqual([17, 17, 17])
+    expect(g.phase).toBe('dealing') // 发完仍停留发牌阶段，第三轮明牌 ×2 窗口
+    g = applyAction(g, { type: 'start' })
+    expect(g.phase).toBe('calling')
+    expect(g.current).toBe(g.callOrder[0])
+  })
+
+  it('发牌期间明牌：第 1/2/3 轮明牌分别 ×4/×3/×2', () => {
+    let g = createGame(rng(10))
+    g = applyAction(g, { type: 'deal' }) // 第 1 轮
+    g = applyAction(g, { type: 'ming', seat: 0 })
+    expect(g.revealed[0]).toBe(true)
+    expect(g.multiplier).toBe(4)
+    expect(g.moveLog.at(-1)?.type).toBe('ming')
+    g = applyAction(g, { type: 'deal' }) // 第 2 轮
+    g = applyAction(g, { type: 'ming', seat: 1 })
+    expect(g.multiplier).toBe(12) // ×4 × ×3
+    g = applyAction(g, { type: 'deal' }) // 第 3 轮
+    g = applyAction(g, { type: 'ming', seat: 2 })
+    expect(g.multiplier).toBe(24) // ×4 × ×3 × ×2
+  })
+
+  it('发牌未开始不能明牌；重复明牌被拒绝', () => {
+    let g = createGame(rng(10))
+    expect(() => applyAction(g, { type: 'ming', seat: 0 })).toThrow()
+    g = applyAction(g, { type: 'deal' })
+    g = applyAction(g, { type: 'ming', seat: 0 })
+    expect(() => applyAction(g, { type: 'ming', seat: 0 })).toThrow()
+  })
+
+  it('mingFactor：第 1/2/3 轮为 4/3/2', () => {
+    expect(mingFactor(1)).toBe(4)
+    expect(mingFactor(2)).toBe(3)
+    expect(mingFactor(3)).toBe(2)
+    expect(mingFactor(0)).toBe(1)
   })
 })
 
@@ -182,7 +275,7 @@ describe('结算 settle', () => {
   })
 })
 
-describe('叫地主', () => {
+describe('叫地主/抢地主/加倍', () => {
   it('callOrder 从随机起点开始，按 (seat+1)%3 逆时针推进', () => {
     for (const seed of [1, 2, 3, 4, 5, 42]) {
       const g = createGame(rng(seed))
@@ -194,8 +287,7 @@ describe('叫地主', () => {
   })
 
   it('无人叫 → redeal', () => {
-    const g0 = createGame(rng(7))
-    let g = g0
+    let g = dealAll(createGame(rng(7)))
     while (!g.redeal) {
       const seat = g.callOrder[g.callActor]!
       g = applyAction(g, { type: 'call', seat, call: false })
@@ -203,19 +295,84 @@ describe('叫地主', () => {
     expect(g.redeal).toBe(true)
   })
 
-  it('首个叫的人当地主，之后抢 ×2', () => {
-    const g0 = createGame(rng(8))
+  it('首个叫的人成为“叫地主的人”，其余两家先抢，最后回到叫地主的人再选择', () => {
+    const g0 = dealAll(createGame(rng(8)))
     const order = g0.callOrder
-    let g = applyAction(g0, { type: 'call', seat: order[0]!, call: true })
-    expect(g.landlord).toBe(order[0])
+    const caller = order[0]!
+    const next = order[1]!
+    const last = order[2]!
+    let g = applyAction(g0, { type: 'call', seat: caller, call: true })
+    // 首个叫 → 直接进入抢地主
+    expect(g.phase).toBe('robbing')
+    expect(g.callerSeat).toBe(caller)
+    expect(g.landlord).toBe(caller)
     expect(g.callMultiplier).toBe(1)
-    g = applyAction(g, { type: 'call', seat: order[1]!, call: true })
-    expect(g.landlord).toBe(order[1])
+    // 抢地主顺序：下家、再下家、叫地主的人（最后）
+    expect(g.robOrder).toEqual([next, last, caller])
+    // 下家抢 → 倍数翻倍
+    g = applyAction(g, { type: 'call', seat: next, call: true })
+    expect(g.landlord).toBe(next)
     expect(g.callMultiplier).toBe(2)
-    g = applyAction(g, { type: 'call', seat: order[2]!, call: false })
+    expect(g.multiplier).toBe(2)
+    // 再下家不抢
+    g = applyAction(g, { type: 'call', seat: last, call: false })
+    // 回到叫地主的人：可以选择抢（抢回）或不抢
+    expect(g.current).toBe(caller)
+    g = applyAction(g, { type: 'call', seat: caller, call: true })
+    expect(g.landlord).toBe(caller)
+    expect(g.callMultiplier).toBe(4)
+    expect(g.multiplier).toBe(4)
+    // 抢地主结束 → 加倍
+    expect(g.phase).toBe('doubling')
+    // 全部不加倍 → 出牌
+    g = doubleAll()(g)
     expect(g.phase).toBe('playing')
     expect(g.current).toBe(g.landlord)
+    expect(g.multiplier).toBe(4)
+  })
+
+  it('抢地主全部不抢：叫地主的人保持地主，倍数不变', () => {
+    const g0 = dealAll(createGame(rng(11)))
+    const caller = g0.callOrder[0]!
+    let g = applyAction(g0, { type: 'call', seat: caller, call: true })
+    g = robAll()(g)
+    expect(g.phase).toBe('doubling')
+    expect(g.landlord).toBe(caller)
+    expect(g.multiplier).toBe(1)
+  })
+
+  it('加倍：加倍 ×2、超级加倍 ×4，可叠加', () => {
+    const g0 = dealAll(createGame(rng(12)))
+    const order = g0.callOrder
+    let g = applyAction(g0, { type: 'call', seat: order[0]!, call: true })
+    g = robAll()(g)
+    expect(g.phase).toBe('doubling')
+    expect(g.current).toBe(g.doublingOrder[0])
+    g = applyAction(g, { type: 'double', seat: g.doublingOrder[0]!, choice: 1 }) // 加倍 ×2
     expect(g.multiplier).toBe(2)
+    g = applyAction(g, { type: 'double', seat: g.doublingOrder[1]!, choice: 2 }) // 超级加倍 ×4
+    expect(g.multiplier).toBe(8)
+    g = applyAction(g, { type: 'double', seat: g.doublingOrder[2]!, choice: 0 }) // 不加倍
+    expect(g.multiplier).toBe(8)
+    expect(g.phase).toBe('playing')
+  })
+
+  it('出牌阶段地主明牌：倍数 ×2 且手牌公开', () => {
+    const g0 = dealAll(createGame(rng(13)))
+    const order = g0.callOrder
+    let g = applyAction(g0, { type: 'call', seat: order[0]!, call: true })
+    g = robAll()(g)
+    g = doubleAll()(g)
+    const landlord = g.landlord!
+    expect(g.phase).toBe('playing')
+    const before = g.multiplier
+    g = applyAction(g, { type: 'ming', seat: landlord })
+    expect(g.revealed[landlord]).toBe(true)
+    expect(g.multiplier).toBe(before * 2)
+    // 非地主不能明牌；重复明牌被拒绝
+    const farmer = ((landlord + 1) % 3) as 0 | 1 | 2
+    expect(() => applyAction(g, { type: 'ming', seat: farmer })).toThrow()
+    expect(() => applyAction(g, { type: 'ming', seat: landlord })).toThrow()
   })
 })
 
@@ -322,11 +479,24 @@ describe('完整对局模拟（机器人互打）', () => {
         continue
       }
       if (g.finished) return g
+      if (g.phase === 'dealing') {
+        g = g.dealRound >= 3 ? applyAction(g, { type: 'start' }) : applyAction(g, { type: 'deal' })
+        continue
+      }
       if (g.phase === 'calling') {
         const seat = g.callOrder[g.callActor]!
         const hand = g.hands[seat]!
-        const strong = hand.filter((x) => x.r >= 12).length >= 1 || hand.filter((x) => x.r >= 9).length >= 3
-        g = applyAction(g, { type: 'call', seat, call: strong || random() < 0.3 })
+        g = applyAction(g, { type: 'call', seat, call: botCall(hand, random) })
+        continue
+      }
+      if (g.phase === 'robbing') {
+        const seat = g.robOrder[g.robActor]!
+        g = applyAction(g, { type: 'call', seat, call: botRob(g.hands[seat]!, random) })
+        continue
+      }
+      if (g.phase === 'doubling') {
+        const seat = g.doublingOrder[g.doublingActor]!
+        g = applyAction(g, { type: 'double', seat, choice: botDouble(g.hands[seat]!, random) })
         continue
       }
       const seat = g.current

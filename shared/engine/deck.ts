@@ -43,6 +43,33 @@ export function deal(rng: () => number = Math.random): DealResult {
   }
 }
 
+export interface DealPlan {
+  /** rounds[r][seat] = 第 r 轮（0..2）发给 seat 的牌；每人 6+6+5=17 张 */
+  rounds: Card[][][]
+  /** 3 张底牌 */
+  bottom: Card[]
+}
+
+/**
+ * 分 3 轮发牌：每轮按座位 0→1→2 依次发一小撮（6、6、5），
+ * 供客户端做“逐轮发牌 + 动画”展示（规则引擎仍以最终手牌为准）。
+ */
+export function dealInRounds(rng: () => number = Math.random): DealPlan {
+  const deck = shuffle(newDeck(), rng)
+  const chunk = [6, 6, 5]
+  const rounds: Card[][][] = []
+  let idx = 0
+  for (const size of chunk) {
+    const round: Card[][] = [[], [], []]
+    for (let seat = 0; seat < 3; seat++) {
+      round[seat] = deck.slice(idx, idx + size)
+      idx += size
+    }
+    rounds.push(round)
+  }
+  return { rounds, bottom: deck.slice(51, 54) }
+}
+
 /** 单张牌的可读名（如 "10♠"、"小王"） */
 export function cardName(c: Card): string {
   const names = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2', '小王', '大王']

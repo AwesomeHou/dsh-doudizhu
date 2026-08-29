@@ -1775,7 +1775,10 @@ export function DoudizhuApp() {
     const closeOnHostNavigation = (event: MouseEvent) => {
       if (!standaloneOpen && !open) return
       const target = event.target
-      if (!(target instanceof HTMLElement) || target.closest('[data-dsh-doudizhu]')) return
+      // 宿主侧栏的 icon-only 按钮（如项目文件夹上的「新建会话」+ 号）点击目标是其内部
+      // SVG 图标（SVGElement，不是 HTMLElement）。用 Element 判断才能覆盖这种点击，
+      // 否则点击后斗地主独立工作区不释放、用户仍停留在斗地主页面。
+      if (!(target instanceof Element) || target.closest('[data-dsh-doudizhu]')) return
       const sidebar = findHostSidebarRoot()
       if (!sidebar || !sidebar.contains(target)) return
       const navigationItem = target.closest('[role="treeitem"]')
